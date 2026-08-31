@@ -1,0 +1,6 @@
+{
+  "name": "Plataforma de Avaliação de Perfil",
+  "description": "Plataforma profissional de aplicação de testes DISC, Fit Cultural e Raciocínio Lógico para processos seletivos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
