@@ -89,7 +89,11 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {currentView === 'candidate' && candidateName && (
-              <div className="hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+              <div
+                className={`hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 transition-all duration-300 ${
+                  navVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'
+                }`}
+              >
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 <span className="font-semibold text-slate-900">{candidateName}</span>
                 {jobPosition && (
