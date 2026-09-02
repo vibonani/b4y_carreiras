@@ -1,28 +1,32 @@
 import React from 'react';
 import { CandidateResult } from '../types';
-import { Eye, ExternalLink, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Eye, ExternalLink, ChevronRight, CheckCircle2, Trash2 } from 'lucide-react';
 
 interface CandidateTableProps {
   candidates: CandidateResult[];
   onSelectCandidate: (candidate: CandidateResult) => void;
+  onDeleteCandidate: (id: string) => void;
 }
 
 export const CandidateTable: React.FC<CandidateTableProps> = ({
   candidates,
   onSelectCandidate,
+  onDeleteCandidate,
 }) => {
-  const getDiscBadge = (predominant: string) => {
+  const getBigFiveBadge = (predominant: string) => {
     switch (predominant) {
-      case 'Dominância':
-        return { label: 'D', full: 'Dominância', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
-      case 'Influência':
-        return { label: 'I', full: 'Influência', bg: 'bg-amber-50 text-amber-700 border-amber-200' };
-      case 'Estabilidade':
-        return { label: 'S', full: 'Estabilidade', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-      case 'Conformidade':
-        return { label: 'C', full: 'Conformidade', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'Extroversão':
+        return { label: 'E', full: 'Extroversão', bg: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'Amabilidade':
+        return { label: 'A', full: 'Amabilidade', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'Conscienciosidade':
+        return { label: 'C', full: 'Conscienciosidade', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'Estabilidade Emocional':
+        return { label: 'N', full: 'Estabilidade Emocional', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'Abertura à Experiência':
+        return { label: 'O', full: 'Abertura à Experiência', bg: 'bg-violet-50 text-violet-700 border-violet-200' };
       default:
-        return { label: 'D', full: 'Dominância', bg: 'bg-slate-50 text-slate-700 border-slate-200' };
+        return { label: '—', full: predominant, bg: 'bg-slate-50 text-slate-700 border-slate-200' };
     }
   };
 
@@ -44,7 +48,7 @@ export const CandidateTable: React.FC<CandidateTableProps> = ({
             <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               <th scope="col" className="py-3.5 px-4 sm:px-6">Candidato</th>
               <th scope="col" className="py-3.5 px-4">Vaga</th>
-              <th scope="col" className="py-3.5 px-4 text-center">DISC</th>
+              <th scope="col" className="py-3.5 px-4 text-center">BIG 5</th>
               <th scope="col" className="py-3.5 px-4 text-center">Fit Cultural</th>
               <th scope="col" className="py-3.5 px-4 text-center">Raciocínio Lógico</th>
               <th scope="col" className="py-3.5 px-4 text-center">Data</th>
@@ -53,7 +57,9 @@ export const CandidateTable: React.FC<CandidateTableProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {candidates.map((c) => {
-              const discBadge = getDiscBadge(c.discScores.predominant);
+              const bigFiveBadge = c.bigFiveScores
+                ? getBigFiveBadge(c.bigFiveScores.predominant)
+                : { label: '—', full: 'Não disponível (teste anterior ao BIG 5)', bg: 'bg-slate-50 text-slate-400 border-slate-200' };
 
               return (
                 <tr
@@ -85,13 +91,17 @@ export const CandidateTable: React.FC<CandidateTableProps> = ({
                     </span>
                   </td>
 
-                  {/* DISC */}
+                  {/* BIG 5 */}
                   <td className="py-4 px-4 text-center">
                     <span
-                      title={`Predominante: ${discBadge.full} (D:${c.discScores.d}% I:${c.discScores.i}% S:${c.discScores.s}% C:${c.discScores.c}%)`}
-                      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold border ${discBadge.bg}`}
+                      title={
+                        c.bigFiveScores
+                          ? `Predominante: ${bigFiveBadge.full} (E:${c.bigFiveScores.e}% A:${c.bigFiveScores.a}% C:${c.bigFiveScores.c}% N:${c.bigFiveScores.n}% O:${c.bigFiveScores.o}%)`
+                          : bigFiveBadge.full
+                      }
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold border ${bigFiveBadge.bg}`}
                     >
-                      {discBadge.label}
+                      {bigFiveBadge.label}
                     </span>
                   </td>
 
@@ -116,17 +126,33 @@ export const CandidateTable: React.FC<CandidateTableProps> = ({
 
                   {/* Action */}
                   <td className="py-4 px-4 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectCandidate(c);
-                      }}
-                      className="inline-flex items-center space-x-1 text-xs font-semibold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-100 transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1" />
-                      <span>Ver perfil</span>
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectCandidate(c);
+                        }}
+                        className="inline-flex items-center space-x-1 text-xs font-semibold text-teal-600 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-100 transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5 mr-1" />
+                        <span>Ver perfil</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const confirmed = window.confirm(
+                            `Excluir o registro de ${c.fullName}?\n\nIsso libera o e-mail (${c.email}) para que ele possa se candidatar novamente. Essa ação não pode ser desfeita.`
+                          );
+                          if (confirmed) onDeleteCandidate(c.id);
+                        }}
+                        title="Excluir candidato"
+                        className="inline-flex items-center justify-center text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 p-1.5 rounded-lg border border-rose-100 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

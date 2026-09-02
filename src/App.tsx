@@ -6,10 +6,11 @@ import {
   JobPosition,
   SessionState
 } from './types';
-import { 
-  DISC_QUESTIONS, 
-  FIT_CULTURAL_QUESTIONS, 
-  LOGIC_QUESTIONS 
+import {
+  BIG_FIVE_QUESTIONS,
+  LIKERT_OPTIONS,
+  FIT_CULTURAL_QUESTIONS,
+  LOGIC_QUESTIONS
 } from './data/mockData';
 import { AssessmentService } from './services/apiService';
 import { AuthService } from './services/authService';
@@ -19,6 +20,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { QuestionCard } from './components/QuestionCard';
 import { TestNavigation } from './components/TestNavigation';
 import { TestIntro } from './components/TestIntro';
+import { TestOverviewScreen } from './components/TestOverviewScreen';
 import { InstructionsModal } from './components/InstructionsModal';
 import { StepTransitionModal } from './components/StepTransitionModal';
 import { QuestionTimer } from './components/QuestionTimer';
@@ -30,6 +32,16 @@ import { AdminLogin } from './components/AdminLogin';
 
 // Key used to remember the candidate's session across reloads / closed tabs
 const SESSION_STORAGE_KEY = 'b4y_session_id';
+
+// Set synchronously the instant a candidate finishes the last question,
+// before the background save/complete calls even start — so a reload that
+// interrupts those calls can still be recognized as "already finished"
+// rather than resuming the candidate mid-test on the next load.
+const COMPLETED_MARKER_PREFIX = 'b4y_completed_';
+
+// How long the completion screen stays up, after the background save/complete
+// calls are confirmed done, before auto-redirecting home.
+const REDIRECT_DELAY_MS = 5000;
 
 export default function App() {
   // Helper to check if current URL points to Management / HR view
@@ -58,6 +70,7 @@ export default function App() {
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [showDiscToFitTransition, setShowDiscToFitTransition] = useState(false);
   const [showFitToLogicTransition, setShowFitToLogicTransition] = useState(false);
+  const [checkingDashboardAccess, setCheckingDashboardAccess] = useState(false);
 
   // Assessment session (persisted server-side, resumable across reloads)
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -96,14 +109,25 @@ export default function App() {
     }
   };
 
-  // Any attempt to reach the management area goes through the server-side session check first
+  // Any attempt to reach the management area goes through the server-side session check first.
+  // Guarded by a ref (not state) so React 18 Strict Mode's double-invocation of state
+  // updaters can't trigger the auth check twice in a row.
+  const dashboardCheckInFlightRef = React.useRef(false);
   const requestDashboardAccess = async () => {
-    const authed = await AuthService.status();
-    setIsAuthenticated(authed);
-    if (authed) {
-      handleViewChange('dashboard');
-    } else {
-      setShowLoginModal(true);
+    if (dashboardCheckInFlightRef.current) return;
+    dashboardCheckInFlightRef.current = true;
+    setCheckingDashboardAccess(true);
+    try {
+      const authed = await AuthService.status();
+      setIsAuthenticated(authed);
+      if (authed) {
+        handleViewChange('dashboard');
+      } else {
+        setShowLoginModal(true);
+      }
+    } finally {
+      dashboardCheckInFlightRef.current = false;
+      setCheckingDashboardAccess(false);
     }
   };
 
@@ -113,6 +137,28 @@ export default function App() {
     } else {
       handleViewChange(view);
     }
+  };
+
+  // Clicking the logo always takes you back to the very first screen. It also
+  // forgets the local session pointer and candidate identity — otherwise the
+  // header kept showing the previous candidate's name/vaga on the homepage,
+  // and reloading the page would silently resume the abandoned test instead
+  // of staying on the welcome screen. Nothing is actually lost: the session
+  // is still saved server-side and resumes normally if they re-enter the
+  // same e-mail on the identification screen.
+  const handleLogoClick = () => {
+    handleViewChange('candidate');
+    setStep('welcome');
+    setSessionId(null);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setCandidateInfo({ fullName: '', email: '', phone: '', jobPosition: '', termsAccepted: false });
+    setDiscAnswers({});
+    setFitAnswers({});
+    setLogicAnswers({});
+    setCurrentDiscIndex(0);
+    setCurrentFitIndex(0);
+    setCurrentLogicIndex(0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleLoginSuccess = () => {
@@ -153,6 +199,12 @@ export default function App() {
     }
   }, []);
 
+  // Retry any finished assessment that failed to reach the server last time
+  // this browser was open (see AssessmentService.processAndSaveAssessment).
+  useEffect(() => {
+    AssessmentService.flushPendingResults();
+  }, []);
+
   // Silently resume an in-progress session remembered from a previous visit
   // (reload or closed-tab-and-reopened), rehydrating step/answers/index at once.
   useEffect(() => {
@@ -163,7 +215,30 @@ export default function App() {
         return;
       }
 
+      // The candidate already finished this session before whatever caused
+      // this reload (see COMPLETED_MARKER_PREFIX) — show the completion
+      // screen instead of resuming mid-test, and nudge the server-side
+      // completion along in case it was interrupted too.
+      const finishedLocally = localStorage.getItem(COMPLETED_MARKER_PREFIX + storedSessionId) === '1';
+      if (finishedLocally) {
+        localStorage.removeItem(COMPLETED_MARKER_PREFIX + storedSessionId);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        AssessmentService.completeSession(storedSessionId);
+      }
+
       const session = await AssessmentService.getSession(storedSessionId);
+
+      if (finishedLocally) {
+        // Still populate name/email/etc. for the completion screen, but
+        // don't resume progress or leave a resumable session pointer behind
+        // — applySessionState re-writes SESSION_STORAGE_KEY, so it has to be
+        // cleared again after calling it.
+        if (session) applySessionState(session);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        setStep('completed');
+        setIsRehydrating(false);
+        return;
+      }
 
       if (!session || session.status === 'CONCLUIDA') {
         // Session finished (or no longer exists) — clear it and let the candidate
@@ -182,18 +257,25 @@ export default function App() {
     rehydrate();
   }, []);
 
-  // Secret keyboard shortcut for management (Ctrl + Shift + A or Alt + A)
+  // Secret keyboard shortcut for management (Ctrl + Shift + A or Alt + A).
+  // Reads currentView from a ref (kept in sync below) instead of a setState
+  // updater, since updater functions run side effects twice under Strict Mode.
+  const finalizeInFlightRef = React.useRef(false);
+  const currentViewRef = React.useRef(currentView);
+  useEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') || (e.altKey && e.key.toLowerCase() === 'a')) {
-        e.preventDefault();
-        setCurrentView(prev => {
-          if (prev === 'candidate') {
-            requestDashboardAccess();
-            return prev;
-          }
-          return 'candidate';
-        });
+      const isShortcut = (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') || (e.altKey && e.key.toLowerCase() === 'a');
+      if (!isShortcut) return;
+      e.preventDefault();
+
+      if (currentViewRef.current === 'candidate') {
+        requestDashboardAccess();
+      } else {
+        handleViewChange('candidate');
       }
     };
 
@@ -201,8 +283,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // --- Step 1: Start Welcome -> Identification
+  // --- Step 1: Start Welcome -> Overview -> Identification
   const handleStartWelcome = () => {
+    setStep('overview');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOverviewContinue = () => {
     setStep('identification');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -216,6 +303,7 @@ export default function App() {
       ...prev,
       fullName: session.nome,
       email: session.email,
+      phone: session.telefone || prev.phone,
       jobPosition: (session.vaga || '') as JobPosition | '',
     }));
     setDiscAnswers(session.respostas.disc);
@@ -227,28 +315,37 @@ export default function App() {
   };
 
   // --- Step 2: Submit Identification -> create/resume session -> Instructions -> DISC
-  const handleSubmitIdentification = async (info: CandidateInfo) => {
+  //
+  // The DISC/Fit/Logic screens render entirely from local state (questions are
+  // static), so there's no reason to block navigation on the Apps Script
+  // round-trip. We optimistically assume the common case — a brand-new
+  // session — and show the instructions right away; the real check runs in
+  // the background and corrects course if it turns out to be wrong: a
+  // returning candidate gets fast-forwarded to where they actually left off,
+  // and an already-completed candidate gets pulled back to the block screen.
+  const handleSubmitIdentification = (info: CandidateInfo) => {
     setCandidateInfo(info);
     setIdentificationBlocked(false);
+    setShowInstructionsModal(true);
 
-    const result = await AssessmentService.startOrResumeSession(info);
+    AssessmentService.startOrResumeSession(info).then((result) => {
+      if ('blocked' in result && result.blocked) {
+        setShowInstructionsModal(false);
+        setIdentificationBlocked(true);
+        return;
+      }
 
-    if ('blocked' in result && result.blocked) {
-      setIdentificationBlocked(true);
-      return;
-    }
+      const session = result as SessionState;
+      applySessionState(session);
 
-    const session = result as SessionState;
-    applySessionState(session);
-
-    if (session.isNew) {
-      // Brand-new session -> same flow as before: show instructions, start at DISC Q1
-      setShowInstructionsModal(true);
-    } else {
-      // Resuming an in-progress session -> jump straight back to where they left off
-      setStep(session.etapaAtual);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+      if (!session.isNew) {
+        // Turned out to be a resume, not a fresh start — jump to their real
+        // progress instead of leaving them on the instructions/DISC Q1.
+        setShowInstructionsModal(false);
+        setStep(session.etapaAtual);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
   };
 
   const handleConfirmInstructions = () => {
@@ -259,13 +356,13 @@ export default function App() {
 
   // --- Step 3: DISC Navigation
   const handleSelectDiscOption = (optionId: string) => {
-    const qId = DISC_QUESTIONS[currentDiscIndex].id;
+    const qId = BIG_FIVE_QUESTIONS[currentDiscIndex].id;
     setDiscAnswers(prev => ({ ...prev, [qId]: optionId }));
     if (sessionId) AssessmentService.saveAnswer(sessionId, 'disc', qId, optionId);
   };
 
   const handleNextDisc = () => {
-    if (currentDiscIndex < DISC_QUESTIONS.length - 1) {
+    if (currentDiscIndex < BIG_FIVE_QUESTIONS.length - 1) {
       const nextIndex = currentDiscIndex + 1;
       setCurrentDiscIndex(nextIndex);
       if (sessionId) AssessmentService.saveProgress(sessionId, 'disc', nextIndex);
@@ -316,6 +413,7 @@ export default function App() {
     setShowFitToLogicTransition(false);
     setStep('logic');
     setCurrentLogicIndex(0);
+    resetLogicTimer(0);
     if (sessionId) AssessmentService.saveProgress(sessionId, 'logic', 0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -330,36 +428,81 @@ export default function App() {
   };
 
   // --- Step 5: Logical Reasoning Navigation
+
+  // Clears a logic question's persisted timer deadline so arriving at it
+  // (forward or backward) always starts a fresh 2-minute countdown. Only a
+  // same-question page reload should preserve the remaining time — without
+  // this, going "Voltar" to an earlier question re-reads its old, likely
+  // already-expired deadline and immediately snaps back forward.
+  const resetLogicTimer = (questionIndex: number) => {
+    const question = LOGIC_QUESTIONS[questionIndex];
+    if (question) localStorage.removeItem(`b4y_logic_timer_${sessionId}_${question.id}`);
+  };
+
   const handleSelectLogicOption = (optionId: string) => {
     const qId = LOGIC_QUESTIONS[currentLogicIndex].id;
     setLogicAnswers(prev => ({ ...prev, [qId]: optionId }));
     if (sessionId) AssessmentService.saveAnswer(sessionId, 'logic', qId, optionId);
   };
 
-  const handleNextLogic = () => {
+  const handleNextLogic = async () => {
     if (currentLogicIndex < LOGIC_QUESTIONS.length - 1) {
       const nextIndex = currentLogicIndex + 1;
+      resetLogicTimer(nextIndex);
       setCurrentLogicIndex(nextIndex);
       if (sessionId) AssessmentService.saveProgress(sessionId, 'logic', nextIndex);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      // Finalize full assessment! Process and submit results to the server for the HR Dashboard
-      AssessmentService.processAndSaveAssessment(
-        candidateInfo,
-        discAnswers,
-        fitAnswers,
-        logicAnswers
-      );
+      // Guard against submitting more than once for the same session — this can
+      // otherwise fire twice (e.g. a manual click racing the timer's onTimeUp,
+      // or a remount re-triggering an already-expired QuestionTimer deadline),
+      // which would create duplicate "Concluído" records for the same person.
+      if (finalizeInFlightRef.current) return;
+      finalizeInFlightRef.current = true;
 
-      // Transition to final candidate completion screen
+      // Marked synchronously, before any async work — so if the tab reloads
+      // or crashes before the save below finishes, the rehydrate effect on
+      // next load recognizes this session as already finished (see its
+      // COMPLETED_MARKER_PREFIX check) instead of resuming mid-test.
+      if (sessionId) localStorage.setItem(COMPLETED_MARKER_PREFIX + sessionId, '1');
+
+      // The completion screen only needs the answers already sitting in local
+      // state — nothing it renders depends on the server confirming the save.
+      // Move on immediately and let the two persistence calls (local results
+      // store + Apps Script session lock) finish in the background; waiting
+      // on them here is what made the last question feel like it hung.
       setStep('completed');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      Promise.all([
+        AssessmentService.processAndSaveAssessment(
+          candidateInfo,
+          discAnswers,
+          fitAnswers,
+          logicAnswers
+        ),
+        sessionId ? AssessmentService.completeSession(sessionId) : Promise.resolve(),
+      ]).finally(() => {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        if (sessionId) localStorage.removeItem(COMPLETED_MARKER_PREFIX + sessionId);
+
+        // Only safe to auto-redirect home now that the markers above are
+        // cleared — doing this on a fixed timer instead (independent of the
+        // save/complete calls above) raced a slow backend: if the redirect's
+        // full page reload landed before this cleanup ran, the rehydrate
+        // effect would still see COMPLETED_MARKER_PREFIX set and bounce the
+        // candidate right back to this same completion screen.
+        setTimeout(() => {
+          window.location.href = '/';
+        }, REDIRECT_DELAY_MS);
+      });
     }
   };
 
   const handlePrevLogic = () => {
     if (currentLogicIndex > 0) {
       const prevIndex = currentLogicIndex - 1;
+      resetLogicTimer(prevIndex);
       setCurrentLogicIndex(prevIndex);
       if (sessionId) AssessmentService.saveProgress(sessionId, 'logic', prevIndex);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -375,7 +518,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900"
+      className="min-h-dvh bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900"
       style={{ backgroundColor: currentView === 'candidate' && step === 'welcome' ? '#e6f4f1' : undefined }}
     >
       
@@ -383,10 +526,20 @@ export default function App() {
       <Header
         currentView={currentView}
         onNavigate={handleGuardedNavigate}
+        onLogoClick={handleLogoClick}
         candidateName={candidateInfo.fullName}
         jobPosition={candidateInfo.jobPosition}
         showNav={step === 'welcome'}
       />
+
+      {checkingDashboardAccess && !showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-xs">
+          <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-3 shadow-lg text-sm font-medium text-slate-700">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Verificando acesso...</span>
+          </div>
+        </div>
+      )}
 
       {showLoginModal && (
         <AdminLogin onSuccess={handleLoginSuccess} onCancel={handleLoginCancel} />
@@ -398,7 +551,7 @@ export default function App() {
 
       {showDiscToFitTransition && (
         <StepTransitionModal
-          completedLabel="Teste DISC"
+          completedLabel="Teste BIG 5"
           nextLabel="Fit Cultural"
           nextIcon={HeartHandshake}
           onConfirm={handleConfirmDiscToFitTransition}
@@ -456,6 +609,19 @@ export default function App() {
                 </motion.div>
               )}
 
+              {/* TELA 1.5: AVISO / VISÃO GERAL DOS TESTES */}
+              {step === 'overview' && (
+                <motion.div
+                  key="overview"
+                  variants={pageVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                >
+                  <TestOverviewScreen onContinue={handleOverviewContinue} />
+                </motion.div>
+              )}
+
               {/* TELA 2: IDENTIFICAÇÃO */}
               {step === 'identification' && (
                 <motion.div
@@ -473,7 +639,7 @@ export default function App() {
                 </motion.div>
               )}
 
-              {/* TELA 3: DISC */}
+              {/* TELA 3: BIG 5 */}
               {step === 'disc' && (
                 <motion.div
                   key={`disc-${currentDiscIndex}`}
@@ -485,19 +651,18 @@ export default function App() {
                 >
                   <ProgressBar
                     current={currentDiscIndex + 1}
-                    total={DISC_QUESTIONS.length}
-                    label={`${currentDiscIndex + 1} de ${DISC_QUESTIONS.length}`}
+                    total={BIG_FIVE_QUESTIONS.length}
+                    label={`${currentDiscIndex + 1} de ${BIG_FIVE_QUESTIONS.length}`}
                   />
 
                   {/* Question Card */}
                   <QuestionCard
                     questionNumber={currentDiscIndex + 1}
-                    totalQuestions={DISC_QUESTIONS.length}
-                    scenario={DISC_QUESTIONS[currentDiscIndex].scenario}
-                    prompt={DISC_QUESTIONS[currentDiscIndex].prompt}
-                    description={DISC_QUESTIONS[currentDiscIndex].description}
-                    options={DISC_QUESTIONS[currentDiscIndex].options}
-                    selectedOptionId={discAnswers[DISC_QUESTIONS[currentDiscIndex].id]}
+                    totalQuestions={BIG_FIVE_QUESTIONS.length}
+                    prompt={BIG_FIVE_QUESTIONS[currentDiscIndex].prompt}
+                    description="Marque o quanto esta frase combina com você."
+                    options={LIKERT_OPTIONS}
+                    selectedOptionId={discAnswers[BIG_FIVE_QUESTIONS[currentDiscIndex].id]}
                     onSelectOption={handleSelectDiscOption}
                   />
 
@@ -506,9 +671,9 @@ export default function App() {
                     onPrev={handlePrevDisc}
                     onNext={handleNextDisc}
                     isFirstQuestion={currentDiscIndex === 0}
-                    isLastQuestion={currentDiscIndex === DISC_QUESTIONS.length - 1}
-                    isAnswerSelected={!!discAnswers[DISC_QUESTIONS[currentDiscIndex].id]}
-                    finishButtonText="Finalizar teste DISC"
+                    isLastQuestion={currentDiscIndex === BIG_FIVE_QUESTIONS.length - 1}
+                    isAnswerSelected={!!discAnswers[BIG_FIVE_QUESTIONS[currentDiscIndex].id]}
+                    finishButtonText="Finalizar teste BIG 5"
                   />
                 </motion.div>
               )}
@@ -569,6 +734,7 @@ export default function App() {
                     <QuestionTimer
                       questionKey={currentLogicIndex}
                       duration={120}
+                      storageKey={`b4y_logic_timer_${sessionId}_${LOGIC_QUESTIONS[currentLogicIndex].id}`}
                       onTimeUp={handleNextLogic}
                     />
                   </div>
@@ -591,6 +757,7 @@ export default function App() {
                     isLastQuestion={currentLogicIndex === LOGIC_QUESTIONS.length - 1}
                     isAnswerSelected={!!logicAnswers[LOGIC_QUESTIONS[currentLogicIndex].id]}
                     finishButtonText="Concluir Avaliação"
+                    hidePrev
                   />
                 </motion.div>
               )}
@@ -617,6 +784,14 @@ export default function App() {
             <footer className="py-6 border-t border-slate-200/80 bg-white/50 text-center text-xs text-slate-400">
               <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
                 <span>© 2026 Back4You. Todos os direitos reservados.</span>
+                <a
+                  href="https://wa.me/12991800450"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-slate-600 transition-colors"
+                >
+                  Dev VB
+                </a>
                 <span>Ambiente seguro de seleção corporativa</span>
               </div>
             </footer>

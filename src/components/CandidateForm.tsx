@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, Briefcase, CheckSquare, ArrowRight, AlertCircle, ShieldAlert, CheckCircle2, Clock, Lock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { User, Mail, Phone, Briefcase, CheckSquare, ArrowRight, AlertCircle, ShieldAlert, CheckCircle2, Clock, Lock, Loader2 } from 'lucide-react';
 import { CandidateInfo, JobPosition } from '../types';
-import { JOB_POSITIONS } from '../data/mockData';
 import { AssessmentService } from '../services/apiService';
+import { LgpdModal } from './LgpdModal';
 
 interface CandidateFormProps {
   initialData: CandidateInfo;
-  onSubmit: (data: CandidateInfo) => void;
+  onSubmit: (data: CandidateInfo) => void | Promise<void>;
   // True when the server rejected the submitted e-mail because it already
   // has a CONCLUÍDA session (checked authoritatively on submit, in App.tsx)
   externallyBlocked?: boolean;
@@ -21,6 +21,17 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
   const [errors, setErrors] = useState<Partial<Record<keyof CandidateInfo, string>>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [duplicateResult, setDuplicateResult] = useState<{ isDuplicate: boolean; reason?: 'email' | 'phone' } | null>(null);
+  const [showLgpdModal, setShowLgpdModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobPositions, setJobPositions] = useState<string[]>([]);
+  const [loadingPositions, setLoadingPositions] = useState(true);
+
+  useEffect(() => {
+    AssessmentService.getJobPositions()
+      .then(setJobPositions)
+      .catch(() => setJobPositions([]))
+      .finally(() => setLoadingPositions(false));
+  }, []);
 
   const isBlocked = !!duplicateResult?.isDuplicate || externallyBlocked;
   const blockedReason: 'email' | 'phone' = duplicateResult?.reason || 'email';
@@ -94,18 +105,17 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
       newErrors.termsAccepted = 'É necessário concordar com os termos para prosseguir.';
     }
 
-    // Duplicate Check by E-mail or Phone
-    if (emailRegex.test(formData.email.trim()) || phoneDigits.length >= 10) {
-      const dupCheck = await AssessmentService.checkDuplicateCandidate(formData.email, formData.phone);
-      if (dupCheck.isDuplicate) {
-        setDuplicateResult(dupCheck);
-        if (dupCheck.reason === 'email') {
-          newErrors.email = 'Este e-mail já possui uma avaliação finalizada neste processo.';
-        } else {
-          newErrors.phone = 'Este telefone já possui uma avaliação finalizada neste processo.';
-        }
+    // Duplicate check: reuses whatever handleCheckDuplicatesRealtime already found
+    // on blur, instead of re-querying the server here — that network round-trip
+    // (now against the Google Sheet) was adding several seconds of delay to every
+    // submit. It's just an early warning anyway: onSubmit's session start in
+    // App.tsx re-checks authoritatively against the CONCLUÍDA session record and
+    // blocks the candidate for real if this one somehow missed a duplicate.
+    if (duplicateResult?.isDuplicate) {
+      if (duplicateResult.reason === 'email') {
+        newErrors.email = 'Este e-mail já possui uma avaliação finalizada neste processo.';
       } else {
-        setDuplicateResult(null);
+        newErrors.phone = 'Este telefone já possui uma avaliação finalizada neste processo.';
       }
     }
 
@@ -115,8 +125,14 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (await validate()) {
-      onSubmit(formData);
+      setIsSubmitting(true);
+      try {
+        await onSubmit(formData);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -295,19 +311,22 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
               <select
                 id="select-job-position"
                 value={formData.jobPosition}
+                disabled={loadingPositions}
                 onChange={(e) => {
                   setFormData({ ...formData, jobPosition: e.target.value as JobPosition });
                   if (errors.jobPosition) setErrors({ ...errors, jobPosition: undefined });
                 }}
                 onBlur={() => setTouched({ ...touched, jobPosition: true })}
-                className={`w-full pl-10 pr-10 py-3 rounded-xl border text-sm transition-colors text-slate-900 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+                className={`w-full pl-10 pr-10 py-3 rounded-xl border text-sm transition-colors text-slate-900 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed ${
                   errors.jobPosition
                     ? 'border-rose-300 focus:border-rose-500 bg-rose-50/20'
                     : 'border-slate-300 focus:border-teal-500 hover:border-slate-400'
                 }`}
               >
-                <option value="">Selecione a vaga...</option>
-                {JOB_POSITIONS.map((pos) => (
+                <option value="">
+                  {loadingPositions ? 'Carregando vagas...' : 'Selecione a vaga...'}
+                </option>
+                {jobPositions.map((pos) => (
                   <option key={pos} value={pos}>
                     {pos}
                   </option>
@@ -327,23 +346,40 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
             )}
           </div>
 
-          {/* Checkbox: Li e estou ciente... */}
+          {/* Checkbox: Li e estou ciente... (abre o aviso de LGPD antes de marcar) */}
           <div className="pt-2">
-            <label className="flex items-start space-x-3 cursor-pointer group select-none">
-              <input
-                id="checkbox-terms"
-                type="checkbox"
-                checked={formData.termsAccepted}
-                onChange={(e) => {
-                  setFormData({ ...formData, termsAccepted: e.target.checked });
-                  if (errors.termsAccepted) setErrors({ ...errors, termsAccepted: undefined });
-                }}
-                className="mt-1 w-4 h-4 rounded text-teal-600 border-slate-300 focus:ring-teal-500"
-              />
-              <span className="text-xs sm:text-sm text-slate-600 group-hover:text-slate-800 leading-snug">
-                Li e estou ciente das informações sobre a realização desta avaliação.
+            <div className="flex items-start space-x-3 select-none">
+              <label htmlFor="checkbox-terms" className="-m-3.5 p-3.5 shrink-0 cursor-pointer">
+                <input
+                  id="checkbox-terms"
+                  type="checkbox"
+                  checked={formData.termsAccepted}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      // Don't let it check itself directly — open the LGPD notice
+                      // first; the checkbox stays unchecked until they accept it.
+                      setShowLgpdModal(true);
+                    } else {
+                      setFormData({ ...formData, termsAccepted: false });
+                      if (errors.termsAccepted) setErrors({ ...errors, termsAccepted: undefined });
+                    }
+                  }}
+                  className="block w-4 h-4 rounded text-teal-600 border-slate-300 focus:ring-teal-500 cursor-pointer"
+                />
+              </label>
+              <span className="text-xs sm:text-sm text-slate-600 leading-snug pt-1">
+                Li e estou ciente das{' '}
+                <button
+                  id="btn-open-lgpd-notice"
+                  type="button"
+                  onClick={() => setShowLgpdModal(true)}
+                  className="text-teal-700 font-semibold underline underline-offset-2 hover:text-teal-800 cursor-pointer"
+                >
+                  informações sobre a realização desta avaliação
+                </button>
+                .
               </span>
-            </label>
+            </div>
             {errors.termsAccepted && (
               <p className="mt-1.5 text-xs text-rose-600 flex items-center">
                 <AlertCircle className="w-3.5 h-3.5 mr-1 shrink-0" />
@@ -351,6 +387,17 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
               </p>
             )}
           </div>
+
+          {showLgpdModal && (
+            <LgpdModal
+              onClose={() => setShowLgpdModal(false)}
+              onAccept={() => {
+                setFormData((prev) => ({ ...prev, termsAccepted: true }));
+                if (errors.termsAccepted) setErrors((prev) => ({ ...prev, termsAccepted: undefined }));
+                setShowLgpdModal(false);
+              }}
+            />
+          )}
 
           {/* Submit Button */}
           <div className="pt-4">
@@ -368,10 +415,24 @@ export const CandidateForm: React.FC<CandidateFormProps> = ({
               <button
                 id="btn-submit-identification"
                 type="submit"
-                className="w-full inline-flex items-center justify-center px-6 py-3.5 rounded-xl text-base font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                disabled={isSubmitting}
+                className={`w-full inline-flex items-center justify-center px-6 py-3.5 rounded-xl text-base font-bold text-white shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${
+                  isSubmitting
+                    ? 'bg-teal-600/70 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg cursor-pointer'
+                }`}
               >
-                <span>Continuar para a Avaliação</span>
-                <ArrowRight className="w-5 h-5 ml-2" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Continuar para a Avaliação</span>
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
               </button>
             )}
           </div>

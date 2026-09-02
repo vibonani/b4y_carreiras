@@ -15,21 +15,22 @@ interface StepItem {
 
 const STEPS: StepItem[] = [
   { id: 'identification', order: 1, label: 'Identificação', icon: User },
-  { id: 'disc', order: 2, label: 'DISC', icon: Compass },
+  { id: 'disc', order: 2, label: 'BIG 5', icon: Compass },
   { id: 'fit_cultural', order: 3, label: 'Fit Cultural', icon: HeartHandshake },
   { id: 'logic', order: 4, label: 'Raciocínio Lógico', icon: BrainCircuit },
   { id: 'completed', order: 5, label: 'Concluído', icon: CheckCircle2 },
 ];
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep }) => {
-  // If welcome step, do not show full breadcrumbs or show step 1 starting
-  if (currentStep === 'welcome') {
+  // If welcome/overview step, do not show full breadcrumbs or show step 1 starting
+  if (currentStep === 'welcome' || currentStep === 'overview') {
     return null;
   }
 
   const getStepStatus = (stepId: StepId) => {
     const stepOrderMap: Record<StepId, number> = {
       welcome: 0,
+      overview: 0,
       identification: 1,
       disc: 2,
       fit_cultural: 3,

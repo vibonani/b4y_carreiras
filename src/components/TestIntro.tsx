@@ -9,7 +9,7 @@ export const TestIntro: React.FC<TestIntroProps> = ({ onStart }) => {
   return (
     <div
       id="screen-test-intro"
-      className="relative min-h-[calc(100vh-64px)] flex items-center justify-center overflow-hidden"
+      className="relative min-h-[calc(100dvh-64px)] flex items-center justify-center overflow-hidden"
       style={{
         backgroundColor: '#e6f4f1',
       }}

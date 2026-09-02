@@ -1,16 +1,16 @@
-export type StepId = 
-  | 'welcome' 
-  | 'identification' 
-  | 'disc' 
-  | 'fit_cultural' 
-  | 'logic' 
+export type StepId =
+  | 'welcome'
+  | 'overview'
+  | 'identification'
+  | 'disc'
+  | 'fit_cultural'
+  | 'logic'
   | 'completed';
 
-export type JobPosition = 
-  | 'Analista Comercial'
-  | 'Assistente Administrativo'
-  | 'Analista de Marketing'
-  | 'Desenvolvedor';
+// Job positions are managed dynamically (see AssessmentService.getJobPositions/
+// addJobPosition) rather than being a fixed set of literals, so management can
+// add new ones from the dashboard without a code change.
+export type JobPosition = string;
 
 export interface CandidateInfo {
   fullName: string;
@@ -20,35 +20,39 @@ export interface CandidateInfo {
   termsAccepted: boolean;
 }
 
-export type DISCType = 'D' | 'I' | 'S' | 'C';
+export type BigFiveDomain = 'E' | 'A' | 'C' | 'N' | 'O';
 
-export interface DISCOption {
-  id: string;
-  label: string;
-  text: string;
-  trait: DISCType;
-}
-
-export interface DISCQuestion {
+export interface BigFiveQuestion {
   id: number;
-  scenario?: string;
   prompt: string;
-  description?: string;
-  options: DISCOption[];
+  domain: BigFiveDomain;
+  facet: string;
+  reverse: boolean;
 }
+
+// The 9 core cultural values, 2 questions each (18 questions total).
+export type FitCulturalValue =
+  | 'Energia'
+  | 'Execução/NORTE'
+  | 'Integridade'
+  | 'Ambição'
+  | 'Autenticidade'
+  | 'Dados e Tecnologia'
+  | 'Disciplina'
+  | 'Compromisso'
+  | 'Prática Pedagógica';
 
 export interface FitCulturalOption {
   id: string;
   label: string;
   text: string;
-  category: 'Colaboração' | 'Autonomia' | 'Inovação' | 'Foco no Cliente' | 'Qualidade';
-  weight: number; // 0 to 100
+  weight: number; // 0-100 — aderência desta alternativa ao valor da pergunta
 }
 
 export interface FitCulturalQuestion {
   id: number;
+  value: FitCulturalValue;
   prompt: string;
-  description?: string;
   options: FitCulturalOption[];
 }
 
@@ -68,12 +72,13 @@ export interface LogicQuestion {
   explanation?: string;
 }
 
-export interface DISCScores {
-  d: number; // %
-  i: number; // %
-  s: number; // %
-  c: number; // %
-  predominant: 'Dominância' | 'Influência' | 'Estabilidade' | 'Conformidade';
+export interface BigFiveScores {
+  e: number; // % Extroversão
+  a: number; // % Amabilidade
+  c: number; // % Conscienciosidade
+  n: number; // % Estabilidade Emocional (invertido a partir de Neuroticismo: quanto maior, mais estável)
+  o: number; // % Abertura à Experiência
+  predominant: 'Extroversão' | 'Amabilidade' | 'Conscienciosidade' | 'Estabilidade Emocional' | 'Abertura à Experiência';
   description: string;
 }
 
@@ -86,12 +91,13 @@ export interface CandidateResult {
   date: string;
   timestamp: number;
   status: 'Concluído' | 'Em Andamento';
-  discScores: DISCScores;
-  fitCulturalScore: number; // e.g. 86%
+  bigFiveScores: BigFiveScores;
+  fitCulturalScore: number; // e.g. 88.9 — average of all 18 answers
+  fitCulturalByValue?: Record<FitCulturalValue, number>; // per-value fit (avg of its 2 questions)
   logicScorePercent: number; // e.g. 90%
   logicScoreFraction: string; // e.g. "9/10"
   completedAt?: string;
-  discAnswers?: Record<number, string>;
+  bigFiveAnswers?: Record<number, string>;
   fitAnswers?: Record<number, string>;
   logicAnswers?: Record<number, string>;
 }
@@ -103,6 +109,7 @@ export interface SessionState {
   status: 'EM_ANDAMENTO' | 'CONCLUIDA';
   nome: string;
   email: string;
+  telefone: string;
   vaga: string;
   etapaAtual: SessionEtapa;
   questaoAtual: number;

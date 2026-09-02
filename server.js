@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import * as candidateStore from './candidateStore.js';
 
@@ -12,16 +11,18 @@ const PORT = process.env.PORT || 8787;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
-const DATA_FILE = path.join(__dirname, 'data', 'candidates.json');
 const COOKIE_NAME = 'b4y_session';
 const isProd = process.env.NODE_ENV === 'production';
 
 // DATA_BACKEND controls where session/answer/progress data is stored.
 // 'json' (default) uses the local candidateStore (data/sessions.json).
 // 'sheets' proxies to Google Apps Script (see apps-script/Code.gs).
+// 'supabase' uses a Supabase Postgres project (see supabase/schema.sql).
 const DATA_BACKEND = process.env.DATA_BACKEND || 'json';
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
 const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 if (!ADMIN_PASSWORD || !SESSION_SECRET) {
   console.error(
@@ -39,32 +40,17 @@ if (DATA_BACKEND === 'sheets') {
     );
     process.exit(1);
   }
-} else if (DATA_BACKEND !== 'json') {
-  console.error(`\n[FATAL] DATA_BACKEND inválido: "${DATA_BACKEND}". Valores aceitos: "json" ou "sheets".\n`);
-  process.exit(1);
-}
-
-// ---------- Data storage (JSON file) ----------
-function ensureDataFile() {
-  const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
-}
-
-function readCandidates() {
-  ensureDataFile();
-  try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+} else if (DATA_BACKEND === 'supabase') {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error(
+      '\n[FATAL] Defina SUPABASE_URL e SUPABASE_SERVICE_KEY no arquivo .env para usar DATA_BACKEND=supabase.\n' +
+      'Veja .env.example para o formato esperado.\n'
+    );
+    process.exit(1);
   }
-}
-
-function writeCandidates(list) {
-  ensureDataFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(list, null, 2), 'utf-8');
+} else if (DATA_BACKEND !== 'json') {
+  console.error(`\n[FATAL] DATA_BACKEND inválido: "${DATA_BACKEND}". Valores aceitos: "json", "sheets" ou "supabase".\n`);
+  process.exit(1);
 }
 
 // ---------- Session cookie (HMAC-signed, httpOnly) ----------
@@ -135,6 +121,18 @@ function registerFailedAttempt(ip) {
   loginAttempts.set(ip, entry);
 }
 
+// Without these, an error nobody anticipated (a bad third-party response, a
+// stray rejected promise) would otherwise crash the whole process — killing
+// every candidate's and every admin's connection at once until someone
+// manually restarts it. Logging and carrying on keeps that failure scoped to
+// whichever single request triggered it.
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+
 // ---------- App ----------
 const app = express();
 app.use(express.json());
@@ -175,41 +173,94 @@ apiRouter.get('/auth/status', (req, res) => {
 });
 
 // Protected: full candidate list for the management dashboard
-apiRouter.get('/candidates', requireAuth, (req, res) => {
-  res.json(readCandidates());
+apiRouter.get('/candidates', requireAuth, async (req, res) => {
+  try {
+    res.json(await candidateStore.getResults());
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
 });
 
 // Public: a candidate submitting their own finished assessment
-apiRouter.post('/candidates', (req, res) => {
+apiRouter.post('/candidates', async (req, res) => {
   const record = req.body;
   if (!record || typeof record !== 'object' || !record.email) {
     return res.status(400).json({ error: 'Registro inválido.' });
   }
-  const list = readCandidates();
-  list.unshift(record);
-  writeCandidates(list);
-  res.status(201).json({ success: true });
+  try {
+    // A locked-out write (e.g. Apps Script's lock busy with a concurrent
+    // candidate's answer) resolves with an { error } object rather than
+    // rejecting — treat that the same as a thrown error, not a success.
+    const result = await candidateStore.saveResult(record);
+    if (result && result.error) {
+      return res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+    }
+    res.status(201).json({ success: true });
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
+});
+
+// Protected: removes a candidate's finished result AND resets their session
+// (SESSOES + RESPOSTAS), so management can let them apply again from scratch.
+// Deleting only the result wouldn't be enough — the CONCLUIDA session row is
+// what actually blocks getOrCreateSession from letting them start over.
+apiRouter.delete('/candidates/:id', requireAuth, async (req, res) => {
+  let deleted;
+  try {
+    deleted = await candidateStore.deleteResult(req.params.id);
+  } catch (err) {
+    return res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
+  if (deleted.error === 'NOT_FOUND') {
+    return res.status(404).json({ error: 'Candidato não encontrado.' });
+  }
+  if (deleted.error) {
+    return res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
+
+  try {
+    const result = await candidateStore.deleteSessionByEmail({ email: deleted.email });
+    // The result is already gone; failing to reset the session (e.g. Apps
+    // Script briefly unreachable, or an outdated deployment that doesn't
+    // know this action yet) shouldn't undo that — flag it instead so the
+    // admin knows the e-mail may still be blocked and can retry.
+    res.json({ success: true, sessionResetFailed: !!(result && result.error) });
+  } catch (err) {
+    res.json({ success: true, sessionResetFailed: true });
+  }
 });
 
 // Public: duplicate check without exposing other candidates' data
-apiRouter.post('/candidates/check-duplicate', (req, res) => {
+apiRouter.post('/candidates/check-duplicate', async (req, res) => {
   const { email, phone } = req.body || {};
-  const cleanEmail = String(email || '').toLowerCase().trim();
-  const cleanPhone = String(phone || '').replace(/\D/g, '');
-  const list = readCandidates();
-
-  for (const c of list) {
-    if (c.email && cleanEmail && c.email.toLowerCase().trim() === cleanEmail) {
-      return res.json({ isDuplicate: true, reason: 'email' });
-    }
-    if (c.phone) {
-      const existingDigits = c.phone.replace(/\D/g, '');
-      if (cleanPhone && cleanPhone.length >= 8 && existingDigits.includes(cleanPhone)) {
-        return res.json({ isDuplicate: true, reason: 'phone' });
-      }
-    }
+  try {
+    res.json(await candidateStore.checkDuplicateResult({ email, phone }));
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
   }
-  res.json({ isDuplicate: false });
+});
+
+// Public: list of vagas, needed to populate the candidate identification form
+apiRouter.get('/job-positions', async (req, res) => {
+  try {
+    res.json(await candidateStore.getJobPositions());
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
+});
+
+// Protected: management adds a new vaga so it becomes selectable on the form
+apiRouter.post('/job-positions', requireAuth, async (req, res) => {
+  const { nome } = req.body || {};
+  if (!nome || !String(nome).trim()) {
+    return res.status(400).json({ error: 'Nome da vaga é obrigatório.' });
+  }
+  try {
+    res.json(await candidateStore.addJobPosition({ nome }));
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
 });
 
 // ---------- Session flow (create/resume, incremental answers & progress) ----------
@@ -217,12 +268,15 @@ apiRouter.post('/candidates/check-duplicate', (req, res) => {
 // an existing EM_ANDAMENTO one (looked up by email). Returns {blocked: true} if the
 // candidate already has a CONCLUIDA session.
 apiRouter.post('/session/start', async (req, res) => {
-  const { fullName, email, jobPosition } = req.body || {};
+  const { fullName, email, phone, jobPosition } = req.body || {};
   if (!email || !String(email).trim()) {
     return res.status(400).json({ error: 'E-mail é obrigatório.' });
   }
   try {
-    const result = await candidateStore.getOrCreateSession({ nome: fullName, email, vaga: jobPosition });
+    const result = await candidateStore.getOrCreateSession({ nome: fullName, email, telefone: phone, vaga: jobPosition });
+    if (result && result.error && !('blocked' in result)) {
+      return res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+    }
     res.json(result);
   } catch (err) {
     res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
@@ -269,6 +323,20 @@ apiRouter.post('/session/:id/progress', async (req, res) => {
     const result = await candidateStore.saveProgress({ sessionId: req.params.id, etapaAtual, questaoAtual });
     if (result.error === 'NOT_FOUND') return res.status(404).json(result);
     if (result.error === 'SESSION_LOCKED') return res.status(409).json(result);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: 'Serviço de planilhas indisponível.' });
+  }
+});
+
+// Public: marks the session CONCLUIDA once the candidate finishes all tests,
+// so a later visit (reload, or same e-mail again) is blocked from resuming
+// instead of being dropped back into the old in-progress test.
+apiRouter.post('/session/:id/complete', async (req, res) => {
+  try {
+    const result = await candidateStore.completeSession({ sessionId: req.params.id });
+    if (result.error === 'NOT_FOUND') return res.status(404).json(result);
     if (result.error) return res.status(400).json(result);
     res.json(result);
   } catch (err) {

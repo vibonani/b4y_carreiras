@@ -4,6 +4,7 @@ import logo from '../assets/back4you-logo.png';
 interface HeaderProps {
   currentView: 'candidate' | 'dashboard';
   onNavigate: (view: 'candidate' | 'dashboard') => void;
+  onLogoClick: () => void;
   candidateName?: string;
   jobPosition?: string;
   showNav?: boolean;
@@ -12,6 +13,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentView,
   onNavigate,
+  onLogoClick,
   candidateName,
   jobPosition,
   showNav = true
@@ -47,13 +49,17 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16 sm:h-18">
 
           {/* Logo & Brand Identity */}
-          <div
-            className={`flex items-center space-x-3 transition-all duration-300 ${
+          <button
+            id="btn-logo-home"
+            type="button"
+            onClick={onLogoClick}
+            title="Voltar para o início"
+            className={`flex items-center space-x-3 transition-all duration-300 cursor-pointer ${
               atTop ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-3 pointer-events-none'
             }`}
           >
             <img src={logo} alt="Back4You" className="h-7 sm:h-8 w-auto" />
-          </div>
+          </button>
 
           {/* Right-side cluster: Pill Navigation + Candidate Info / Quick Switch */}
           <div className="flex items-center space-x-4">
@@ -79,12 +85,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   Linkedin
                 </a>
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-full text-sm font-semibold text-white hover:bg-white/10 transition-colors"
-                >
-                  Sobre o Teste
-                </button>
               </nav>
             )}
 

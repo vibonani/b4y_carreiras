@@ -7,8 +7,29 @@
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    /* Never allow sideways scroll, on any device. Wide content (tables,
+       question strips) must scroll inside its own overflow-x container
+       instead — see CandidateTable / CandidateDetails / QuestionCard. */
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     font-family: 'Lato', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  img,
+  svg,
+  video {
+    max-width: 100%;
   }
 }
 

@@ -6,6 +6,8 @@ interface CompletionScreenProps {
   candidate: CandidateInfo;
 }
 
+// The redirect back to "/" is driven by App.tsx, once the background
+// save/complete calls are confirmed done — see REDIRECT_DELAY_MS there.
 export const CompletionScreen: React.FC<CompletionScreenProps> = ({ candidate }) => {
   return (
     <div id="screen-completion" className="max-w-2xl mx-auto px-4 py-10 sm:py-16">
@@ -66,7 +68,7 @@ export const CompletionScreen: React.FC<CompletionScreenProps> = ({ candidate })
         {/* Close page instruction */}
         <div className="pt-6 border-t border-slate-100">
           <p className="text-sm font-medium text-slate-500 bg-slate-100 inline-block px-4 py-2 rounded-xl">
-            Você pode fechar esta página.
+            Você pode fechar esta página. Você será redirecionado para o início em instantes.
           </p>
         </div>
 

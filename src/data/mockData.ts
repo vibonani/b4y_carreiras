@@ -1,536 +1,304 @@
-import { DISCQuestion, FitCulturalQuestion, LogicQuestion, CandidateResult, JobPosition } from '../types';
+﻿import { BigFiveQuestion, FitCulturalQuestion, FitCulturalValue, LogicQuestion } from '../types';
 
-export const JOB_POSITIONS: JobPosition[] = [
-  'Analista Comercial',
-  'Assistente Administrativo',
-  'Analista de Marketing',
-  'Desenvolvedor'
+// 5-point Likert scale reused for every BIG 5 (BFI-2) statement.
+// The option id IS the raw response value (1-5), which the scoring
+// logic in apiService.ts reads directly (applying reverse-keying per item).
+export const LIKERT_OPTIONS = [
+  { id: '1', label: 'A', text: 'Discordo totalmente' },
+  { id: '2', label: 'B', text: 'Discordo um pouco' },
+  { id: '3', label: 'C', text: 'Neutro' },
+  { id: '4', label: 'D', text: 'Concordo um pouco' },
+  { id: '5', label: 'E', text: 'Concordo totalmente' },
 ];
 
-export const DISC_QUESTIONS: DISCQuestion[] = [
+// BFI-2 — Inventário dos Cinco Grandes Fatores (60 itens, Soto & John, 2017)
+// Cada item completa a frase "Eu me vejo como alguém que…". Domínio/faceta/
+// sentido (reverse) seguem exatamente a chave oficial de correção do BFI-2.
+export const BIG_FIVE_QUESTIONS: BigFiveQuestion[] = [
+  { id: 1, prompt: 'É extrovertido/a, sociável.', domain: 'E', facet: 'Sociabilidade', reverse: false },
+  { id: 2, prompt: 'É compassivo/a, tem um coração mole.', domain: 'A', facet: 'Compaixão', reverse: false },
+  { id: 3, prompt: 'Tende a ser desorganizado/a.', domain: 'C', facet: 'Organização', reverse: true },
+  { id: 4, prompt: 'É relaxado/a, lida bem com o estresse.', domain: 'N', facet: 'Ansiedade', reverse: true },
+  { id: 5, prompt: 'Tem pouco interesse em arte.', domain: 'O', facet: 'Sensibilidade Estética', reverse: true },
+  { id: 6, prompt: 'Tem uma personalidade assertiva.', domain: 'E', facet: 'Assertividade', reverse: false },
+  { id: 7, prompt: 'É respeitoso/a, trata os outros com consideração.', domain: 'A', facet: 'Respeito', reverse: false },
+  { id: 8, prompt: 'Tende a ser preguiçoso/a.', domain: 'C', facet: 'Produtividade', reverse: true },
+  { id: 9, prompt: 'Mantém-se otimista após passar por contratempos.', domain: 'N', facet: 'Depressão', reverse: true },
+  { id: 10, prompt: 'É curioso/a sobre muitas coisas diferentes.', domain: 'O', facet: 'Curiosidade Intelectual', reverse: false },
+  { id: 11, prompt: 'Raramente se sente animado/a ou empolgado/a.', domain: 'E', facet: 'Nível de Energia', reverse: true },
+  { id: 12, prompt: 'Tende a encontrar defeitos nos outros.', domain: 'A', facet: 'Confiança', reverse: true },
+  { id: 13, prompt: 'É um trabalhador confiável.', domain: 'C', facet: 'Responsabilidade', reverse: false },
+  { id: 14, prompt: 'É temperamental, muda de humor facilmente.', domain: 'N', facet: 'Volatilidade Emocional', reverse: false },
+  { id: 15, prompt: 'É inventivo/a, encontra soluções originais.', domain: 'O', facet: 'Imaginação Criativa', reverse: false },
+  { id: 16, prompt: 'Tende a ser quieto/a.', domain: 'E', facet: 'Sociabilidade', reverse: true },
+  { id: 17, prompt: 'Sente pouca simpatia pelos outros.', domain: 'A', facet: 'Compaixão', reverse: true },
+  { id: 18, prompt: 'É sistemático/a, gosta de manter as coisas em ordem.', domain: 'C', facet: 'Organização', reverse: false },
+  { id: 19, prompt: 'Pode ficar tenso/a.', domain: 'N', facet: 'Ansiedade', reverse: false },
+  { id: 20, prompt: 'É fascinado/a por arte, música ou literatura.', domain: 'O', facet: 'Sensibilidade Estética', reverse: false },
+  { id: 21, prompt: 'Tende a assumir o comando e liderar situações.', domain: 'E', facet: 'Assertividade', reverse: false },
+  { id: 22, prompt: 'Inicia discussões e brigas com os outros.', domain: 'A', facet: 'Respeito', reverse: true },
+  { id: 23, prompt: 'Tem dificuldade para começar a trabalhar em tarefas.', domain: 'C', facet: 'Produtividade', reverse: true },
+  { id: 24, prompt: 'Sente-se seguro/a, confortável consigo mesmo/a.', domain: 'N', facet: 'Depressão', reverse: true },
+  { id: 25, prompt: 'Evita discussões teóricas ou abstratas.', domain: 'O', facet: 'Curiosidade Intelectual', reverse: true },
+  { id: 26, prompt: 'É menos ativo/a do que as outras pessoas.', domain: 'E', facet: 'Nível de Energia', reverse: true },
+  { id: 27, prompt: 'Tem uma natureza perdoadora, não guarda rancor.', domain: 'A', facet: 'Confiança', reverse: false },
+  { id: 28, prompt: 'Pode ser um pouco descuidado/a.', domain: 'C', facet: 'Responsabilidade', reverse: true },
+  { id: 29, prompt: 'É emocionalmente estável, não se irrita facilmente.', domain: 'N', facet: 'Volatilidade Emocional', reverse: true },
+  { id: 30, prompt: 'Tem pouca imaginação criativa.', domain: 'O', facet: 'Imaginação Criativa', reverse: true },
+  { id: 31, prompt: 'É às vezes tímido/a, inibido/a.', domain: 'E', facet: 'Sociabilidade', reverse: true },
+  { id: 32, prompt: 'É prestativo/a e generoso/a com os outros.', domain: 'A', facet: 'Compaixão', reverse: false },
+  { id: 33, prompt: 'É sistemático/a, mantém as coisas arrumadas e organizadas.', domain: 'C', facet: 'Organização', reverse: false },
+  { id: 34, prompt: 'Preocupa-se muito.', domain: 'N', facet: 'Ansiedade', reverse: false },
+  { id: 35, prompt: 'Valoriza a arte e a beleza.', domain: 'O', facet: 'Sensibilidade Estética', reverse: false },
+  { id: 36, prompt: 'Acha difícil influenciar as pessoas.', domain: 'E', facet: 'Assertividade', reverse: true },
+  { id: 37, prompt: 'É às vezes frio/a e distante.', domain: 'A', facet: 'Respeito', reverse: true },
+  { id: 38, prompt: 'É eficiente, faz as coisas acontecerem.', domain: 'C', facet: 'Produtividade', reverse: false },
+  { id: 39, prompt: 'Sente-se triste com frequência.', domain: 'N', facet: 'Depressão', reverse: false },
+  { id: 40, prompt: 'Gosta de refletir e brincar com ideias complexas.', domain: 'O', facet: 'Curiosidade Intelectual', reverse: false },
+  { id: 41, prompt: 'É cheio/a de energia.', domain: 'E', facet: 'Nível de Energia', reverse: false },
+  { id: 42, prompt: 'Desconfia das intenções dos outros.', domain: 'A', facet: 'Confiança', reverse: true },
+  { id: 43, prompt: 'É alguém com quem se pode contar sempre.', domain: 'C', facet: 'Responsabilidade', reverse: false },
+  { id: 44, prompt: 'Mantém as emoções sob controle.', domain: 'N', facet: 'Volatilidade Emocional', reverse: true },
+  { id: 45, prompt: 'Tem pouca capacidade para criar ideias inovadoras.', domain: 'O', facet: 'Imaginação Criativa', reverse: true },
+  { id: 46, prompt: 'É comunicativo/a, fala bastante.', domain: 'E', facet: 'Sociabilidade', reverse: false },
+  { id: 47, prompt: 'Pode ser um pouco rude ou insensível com os outros.', domain: 'A', facet: 'Compaixão', reverse: true },
+  { id: 48, prompt: 'Tem dificuldade em manter as coisas organizadas.', domain: 'C', facet: 'Organização', reverse: true },
+  { id: 49, prompt: 'Raramente sente medo ou ansiedade.', domain: 'N', facet: 'Ansiedade', reverse: true },
+  { id: 50, prompt: 'Acha que poesia e peças de teatro são entediantes.', domain: 'O', facet: 'Sensibilidade Estética', reverse: true },
+  { id: 51, prompt: 'Prefere deixar que os outros tomem as decisões.', domain: 'E', facet: 'Assertividade', reverse: true },
+  { id: 52, prompt: 'É educado/a, demonstra boas maneiras.', domain: 'A', facet: 'Respeito', reverse: false },
+  { id: 53, prompt: 'É persistente, trabalha até terminar a tarefa.', domain: 'C', facet: 'Produtividade', reverse: false },
+  { id: 54, prompt: 'Sente-se desanimado/a, para baixo com frequência.', domain: 'N', facet: 'Depressão', reverse: false },
+  { id: 55, prompt: 'Tem pouco interesse em ideias abstratas.', domain: 'O', facet: 'Curiosidade Intelectual', reverse: true },
+  { id: 56, prompt: 'Mostra muito entusiasmo.', domain: 'E', facet: 'Nível de Energia', reverse: false },
+  { id: 57, prompt: 'Tende a acreditar no melhor das pessoas.', domain: 'A', facet: 'Confiança', reverse: false },
+  { id: 58, prompt: 'Às vezes age de forma irresponsável.', domain: 'C', facet: 'Responsabilidade', reverse: true },
+  { id: 59, prompt: 'É temperamental, irrita-se com facilidade.', domain: 'N', facet: 'Volatilidade Emocional', reverse: false },
+  { id: 60, prompt: 'É original, tem ideias novas.', domain: 'O', facet: 'Imaginação Criativa', reverse: false },
+];
+
+
+// The 9 core cultural values, displayed in this order across the app.
+export const FIT_CULTURAL_VALUES: { value: FitCulturalValue; emoji: string }[] = [
+  { value: 'Energia', emoji: '⚡' },
+  { value: 'Execução/NORTE', emoji: '🚀' },
+  { value: 'Integridade', emoji: '🛡️' },
+  { value: 'Ambição', emoji: '🎯' },
+  { value: 'Autenticidade', emoji: '🗣️' },
+  { value: 'Dados e Tecnologia', emoji: '📊' },
+  { value: 'Disciplina', emoji: '📅' },
+  { value: 'Compromisso', emoji: '🤝' },
+  { value: 'Prática Pedagógica', emoji: '🧠' },
+];
+
+export const FIT_CULTURAL_QUESTIONS: FitCulturalQuestion[] = [
+  // 1. ENERGIA
   {
     id: 1,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Energia',
+    prompt: 'Você recebe uma demanda importante no final do dia, quando já está cansado e possui outras tarefas pendentes. Como você reage?',
     options: [
-      { id: '1-A', label: 'A', text: 'Decidido', trait: 'D' },
-      { id: '1-B', label: 'B', text: 'Entusiasta', trait: 'I' },
-      { id: '1-C', label: 'C', text: 'Paciente', trait: 'S' },
-      { id: '1-D', label: 'D', text: 'Preciso', trait: 'C' },
+      { id: 'fc-1-a', label: 'A', text: 'Faço o possível para entregar, mas provavelmente deixaria para o dia seguinte se não fosse urgente.', weight: 50 },
+      { id: 'fc-1-b', label: 'B', text: 'Organizo minhas prioridades e busco energia para concluir o que é mais importante.', weight: 100 },
+      { id: 'fc-1-c', label: 'C', text: 'Peço para outra pessoa assumir, pois já estou sobrecarregado.', weight: 25 },
+      { id: 'fc-1-d', label: 'D', text: 'Começo a tarefa, mas paro caso perceba que ela vai exigir mais esforço do que esperava.', weight: 50 },
     ]
   },
   {
     id: 2,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Energia',
+    prompt: 'Sua equipe está passando por uma semana especialmente intensa, com muitas demandas e pressão por resultados. Qual comportamento mais se aproxima do seu?',
     options: [
-      { id: '2-A', label: 'A', text: 'Competitivo', trait: 'D' },
-      { id: '2-B', label: 'B', text: 'Lógico', trait: 'C' },
-      { id: '2-C', label: 'C', text: 'Receptivo', trait: 'S' },
-      { id: '2-D', label: 'D', text: 'Persuasivo', trait: 'I' },
+      { id: 'fc-2-a', label: 'A', text: 'Mantenho meu ritmo, priorizo o que precisa ser feito e tento contribuir para manter o time motivado.', weight: 100 },
+      { id: 'fc-2-b', label: 'B', text: 'Faço apenas aquilo que está diretamente sob minha responsabilidade.', weight: 50 },
+      { id: 'fc-2-c', label: 'C', text: 'Espero que a liderança reorganize as demandas antes de tomar qualquer iniciativa.', weight: 25 },
+      { id: 'fc-2-d', label: 'D', text: 'Continuo trabalhando, mas evito assumir qualquer demanda adicional.', weight: 50 },
     ]
   },
+  // 2. EXECUÇÃO / NORTE
   {
     id: 3,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Execução/NORTE',
+    prompt: 'Você recebe um objetivo claro, mas não existe um passo a passo definido para chegar ao resultado. O que faz?',
     options: [
-      { id: '3-A', label: 'A', text: 'Previsível', trait: 'S' },
-      { id: '3-B', label: 'B', text: 'Otimista', trait: 'I' },
-      { id: '3-C', label: 'C', text: 'Disciplinado', trait: 'C' },
-      { id: '3-D', label: 'D', text: 'Direto', trait: 'D' },
+      { id: 'fc-3-a', label: 'A', text: 'Espero receber instruções mais detalhadas antes de começar.', weight: 25 },
+      { id: 'fc-3-b', label: 'B', text: 'Começo a executar, testo possibilidades e ajusto o caminho conforme obtenho aprendizados.', weight: 100 },
+      { id: 'fc-3-c', label: 'C', text: 'Procuro alguém que já tenha feito algo parecido e sigo exatamente o que essa pessoa fez.', weight: 50 },
+      { id: 'fc-3-d', label: 'D', text: 'Faço um planejamento bastante detalhado antes de iniciar, mesmo que isso atrase a execução.', weight: 75 },
     ]
   },
   {
     id: 4,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Execução/NORTE',
+    prompt: 'Você percebe que uma estratégia definida pela equipe não está gerando o resultado esperado. O que você faria?',
     options: [
-      { id: '4-A', label: 'A', text: 'Cuidadoso', trait: 'C' },
-      { id: '4-B', label: 'B', text: 'Comunicativo', trait: 'I' },
-      { id: '4-C', label: 'C', text: 'Ousado', trait: 'D' },
-      { id: '4-D', label: 'D', text: 'Cooperativo', trait: 'S' },
+      { id: 'fc-4-a', label: 'A', text: 'Continuaria executando até receber uma nova orientação.', weight: 25 },
+      { id: 'fc-4-b', label: 'B', text: 'Apresentaria o problema, buscaria entender a causa e proporia ajustes para chegar ao objetivo.', weight: 100 },
+      { id: 'fc-4-c', label: 'C', text: 'Mudaria a estratégia por conta própria e comunicaria depois.', weight: 50 },
+      { id: 'fc-4-d', label: 'D', text: 'Pararia a execução até que alguém definisse um novo caminho.', weight: 25 },
     ]
   },
+  // 3. INTEGRIDADE
   {
     id: 5,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Integridade',
+    prompt: 'Você percebe que cometeu um erro que passou despercebido. Se ninguém descobrir, provavelmente não haverá consequências imediatas. O que faz?',
     options: [
-      { id: '5-A', label: 'A', text: 'Analítico', trait: 'C' },
-      { id: '5-B', label: 'B', text: 'Amigável', trait: 'S' },
-      { id: '5-C', label: 'C', text: 'Independente', trait: 'D' },
-      { id: '5-D', label: 'D', text: 'Sociável', trait: 'I' },
+      { id: 'fc-5-a', label: 'A', text: 'Corrijo o erro e comunico quem precisa saber.', weight: 100 },
+      { id: 'fc-5-b', label: 'B', text: 'Corrijo discretamente para evitar preocupações desnecessárias.', weight: 75 },
+      { id: 'fc-5-c', label: 'C', text: 'Espero para ver se alguém percebe antes de decidir o que fazer.', weight: 25 },
+      { id: 'fc-5-d', label: 'D', text: 'Se o impacto for pequeno, considero que não vale a pena interromper o trabalho para tratar disso.', weight: 0 },
     ]
   },
   {
     id: 6,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Integridade',
+    prompt: 'Um colega pede sua ajuda para apresentar um resultado e sugere omitir uma informação que poderia gerar questionamentos da liderança. Como você reage?',
     options: [
-      { id: '6-A', label: 'A', text: 'Moderado', trait: 'S' },
-      { id: '6-B', label: 'B', text: 'Perfeccionista', trait: 'C' },
-      { id: '6-C', label: 'C', text: 'Expressivo', trait: 'I' },
-      { id: '6-D', label: 'D', text: 'Autoconfiante', trait: 'D' },
+      { id: 'fc-6-a', label: 'A', text: 'Concordo, desde que a informação não seja essencial para o resultado.', weight: 25 },
+      { id: 'fc-6-b', label: 'B', text: 'Explico que prefiro apresentar os dados completos, mesmo que isso gere perguntas ou desconforto.', weight: 100 },
+      { id: 'fc-6-c', label: 'C', text: 'Deixo que o colega decida, já que o resultado é responsabilidade dele.', weight: 50 },
+      { id: 'fc-6-d', label: 'D', text: 'Apresento a informação, mas tento minimizar sua importância.', weight: 50 },
     ]
   },
+  // 4. AMBIÇÃO
   {
     id: 7,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Ambição',
+    prompt: 'Você alcança uma meta antes do prazo e recebe um feedback positivo. Qual seria sua reação?',
     options: [
-      { id: '7-A', label: 'A', text: 'Apoiador', trait: 'S' },
-      { id: '7-B', label: 'B', text: 'Sistemático', trait: 'C' },
-      { id: '7-C', label: 'C', text: 'Resultadista', trait: 'D' },
-      { id: '7-D', label: 'D', text: 'Inspirador', trait: 'I' },
+      { id: 'fc-7-a', label: 'A', text: 'Fico satisfeito e mantenho o mesmo ritmo para continuar entregando bem.', weight: 75 },
+      { id: 'fc-7-b', label: 'B', text: 'Procuro entender como posso transformar o resultado em um patamar ainda maior.', weight: 100 },
+      { id: 'fc-7-c', label: 'C', text: 'Aproveito o momento para diminuir o ritmo e compensar o esforço anterior.', weight: 25 },
+      { id: 'fc-7-d', label: 'D', text: 'Espero que meu gestor defina qual deve ser meu próximo desafio.', weight: 50 },
     ]
   },
   {
     id: 8,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Ambição',
+    prompt: 'Você percebe que existe uma oportunidade de assumir uma responsabilidade maior, mas isso exigiria aprender algo novo e sair da sua zona de conforto.',
     options: [
-      { id: '8-A', label: 'A', text: 'Constante', trait: 'S' },
-      { id: '8-B', label: 'B', text: 'Detalhista', trait: 'C' },
-      { id: '8-C', label: 'C', text: 'Convincente', trait: 'I' },
-      { id: '8-D', label: 'D', text: 'Energético', trait: 'D' },
+      { id: 'fc-8-a', label: 'A', text: 'Evito assumir porque ainda não tenho domínio suficiente.', weight: 25 },
+      { id: 'fc-8-b', label: 'B', text: 'Aceito o desafio, desde que tenha certeza de que conseguirei executá-lo perfeitamente.', weight: 50 },
+      { id: 'fc-8-c', label: 'C', text: 'Demonstro interesse, busco aprender o necessário e me preparo para assumir a responsabilidade.', weight: 100 },
+      { id: 'fc-8-d', label: 'D', text: 'Prefiro continuar nas atividades em que já tenho experiência.', weight: 25 },
     ]
   },
+  // 5. AUTENTICIDADE
   {
     id: 9,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Autenticidade',
+    prompt: 'Durante uma reunião, a maioria das pessoas concorda com uma decisão que você acredita estar equivocada. O que você faz?',
     options: [
-      { id: '9-A', label: 'A', text: 'Leal', trait: 'S' },
-      { id: '9-B', label: 'B', text: 'Corajoso', trait: 'D' },
-      { id: '9-C', label: 'C', text: 'Popular', trait: 'I' },
-      { id: '9-D', label: 'D', text: 'Metódico', trait: 'C' },
+      { id: 'fc-9-a', label: 'A', text: 'Concordo com o grupo para evitar conflitos.', weight: 25 },
+      { id: 'fc-9-b', label: 'B', text: 'Apresento minha visão de forma respeitosa, explicando os motivos e evidências que sustentam minha posição.', weight: 100 },
+      { id: 'fc-9-c', label: 'C', text: 'Falo sobre minha discordância apenas depois da reunião, individualmente.', weight: 50 },
+      { id: 'fc-9-d', label: 'D', text: 'Se a decisão já parece estar tomada, prefiro não me posicionar.', weight: 25 },
     ]
   },
   {
     id: 10,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Autenticidade',
+    prompt: 'Você recebe um feedback com o qual inicialmente não concorda. Como tende a reagir?',
     options: [
-      { id: '10-A', label: 'A', text: 'Organizado', trait: 'C' },
-      { id: '10-B', label: 'B', text: 'Diplomático', trait: 'S' },
-      { id: '10-C', label: 'C', text: 'Animado', trait: 'I' },
-      { id: '10-D', label: 'D', text: 'Assertivo', trait: 'D' },
+      { id: 'fc-10-a', label: 'A', text: 'Defendo imediatamente meu ponto de vista para explicar por que a pessoa está equivocada.', weight: 25 },
+      { id: 'fc-10-b', label: 'B', text: 'Escuto, procuro entender os exemplos apresentados e reflito sobre o que posso aprender.', weight: 100 },
+      { id: 'fc-10-c', label: 'C', text: 'Aceito o feedback, mas não costumo mudar meu comportamento se não concordar totalmente.', weight: 50 },
+      { id: 'fc-10-d', label: 'D', text: 'Prefiro conversar posteriormente, quando estiver mais confortável com a situação.', weight: 75 },
     ]
   },
+  // 6. DADOS E TECNOLOGIA
   {
     id: 11,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Dados e Tecnologia',
+    prompt: 'Você precisa escolher entre duas estratégias. Sua experiência pessoal favorece uma delas, mas os dados disponíveis apontam para a outra. O que faz?',
     options: [
-      { id: '11-A', label: 'A', text: 'Investigativo', trait: 'C' },
-      { id: '11-B', label: 'B', text: 'Tranquilo', trait: 'S' },
-      { id: '11-C', label: 'C', text: 'Estimulante', trait: 'I' },
-      { id: '11-D', label: 'D', text: 'Persistente', trait: 'D' },
+      { id: 'fc-11-a', label: 'A', text: 'Sigo minha experiência, pois dados nem sempre conseguem mostrar o contexto completo.', weight: 50 },
+      { id: 'fc-11-b', label: 'B', text: 'Analiso os dados, procuro entender a divergência e tomo uma decisão fundamentada.', weight: 100 },
+      { id: 'fc-11-c', label: 'C', text: 'Escolho automaticamente a alternativa indicada pelos dados, sem questioná-los.', weight: 75 },
+      { id: 'fc-11-d', label: 'D', text: 'Adio a decisão até ter certeza absoluta sobre qual alternativa é melhor.', weight: 25 },
     ]
   },
   {
     id: 12,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Dados e Tecnologia',
+    prompt: 'Você percebe que uma atividade que realiza frequentemente poderia ser automatizada com uma nova ferramenta. O que faz?',
     options: [
-      { id: '12-A', label: 'A', text: 'Pioneiro', trait: 'D' },
-      { id: '12-B', label: 'B', text: 'Rigoroso', trait: 'C' },
-      { id: '12-C', label: 'C', text: 'Influente', trait: 'I' },
-      { id: '12-D', label: 'D', text: 'Conciliador', trait: 'S' },
+      { id: 'fc-12-a', label: 'A', text: 'Continuo fazendo da mesma maneira porque já funciona.', weight: 25 },
+      { id: 'fc-12-b', label: 'B', text: 'Pesquiso a ferramenta, avalio se realmente pode melhorar o processo e, se fizer sentido, testo sua aplicação.', weight: 100 },
+      { id: 'fc-12-c', label: 'C', text: 'Começo a usar a ferramenta imediatamente, sem avaliar possíveis impactos.', weight: 50 },
+      { id: 'fc-12-d', label: 'D', text: 'Espero que a empresa implemente oficialmente uma solução antes de buscar alternativas.', weight: 50 },
     ]
   },
+  // 7. DISCIPLINA
   {
     id: 13,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Disciplina',
+    prompt: 'Você possui uma atividade recorrente que não é acompanhada diretamente por ninguém. Como tende a agir?',
     options: [
-      { id: '13-A', label: 'A', text: 'Pragmático', trait: 'C' },
-      { id: '13-B', label: 'B', text: 'Tolerante', trait: 'S' },
-      { id: '13-C', label: 'C', text: 'Objetivo', trait: 'D' },
-      { id: '13-D', label: 'D', text: 'Cativante', trait: 'I' },
+      { id: 'fc-13-a', label: 'A', text: 'Mantenho a rotina porque entendo que a responsabilidade continua sendo minha.', weight: 100 },
+      { id: 'fc-13-b', label: 'B', text: 'Dou mais atenção quando percebo que haverá acompanhamento ou cobrança.', weight: 50 },
+      { id: 'fc-13-c', label: 'C', text: 'Priorizo outras tarefas e retomo essa atividade quando houver necessidade.', weight: 25 },
+      { id: 'fc-13-d', label: 'D', text: 'Tento encontrar uma maneira de tornar a atividade mais eficiente e estabelecer uma rotina para garantir sua execução.', weight: 100 },
     ]
   },
   {
     id: 14,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Disciplina',
+    prompt: 'Você está trabalhando em um projeto de longo prazo e os resultados ainda não apareceram. Como costuma lidar com isso?',
     options: [
-      { id: '14-A', label: 'A', text: 'Eloquente', trait: 'I' },
-      { id: '14-B', label: 'B', text: 'Firme', trait: 'D' },
-      { id: '14-C', label: 'C', text: 'Estruturado', trait: 'C' },
-      { id: '14-D', label: 'D', text: 'Atencioso', trait: 'S' },
+      { id: 'fc-14-a', label: 'A', text: 'Mantenho a consistência, acompanho os indicadores e faço os ajustes necessários ao longo do caminho.', weight: 100 },
+      { id: 'fc-14-b', label: 'B', text: 'Aumento o esforço apenas quando percebo que o prazo está se aproximando.', weight: 50 },
+      { id: 'fc-14-c', label: 'C', text: 'Se não houver resultado rápido, começo a questionar se vale a pena continuar.', weight: 25 },
+      { id: 'fc-14-d', label: 'D', text: 'Continuo executando, mas sem acompanhar muito de perto os indicadores.', weight: 50 },
     ]
   },
+  // 8. COMPROMISSO
   {
     id: 15,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Compromisso',
+    prompt: 'Você assumiu uma entrega para uma determinada data, mas percebe que não conseguirá cumprir o prazo originalmente combinado. O que faz?',
     options: [
-      { id: '15-A', label: 'A', text: 'Magnético', trait: 'I' },
-      { id: '15-B', label: 'B', text: 'Impetuoso', trait: 'D' },
-      { id: '15-C', label: 'C', text: 'Estável', trait: 'S' },
-      { id: '15-D', label: 'D', text: 'Criterioso', trait: 'C' },
+      { id: 'fc-15-a', label: 'A', text: 'Tento resolver sozinho até o último momento e aviso apenas se realmente não conseguir.', weight: 50 },
+      { id: 'fc-15-b', label: 'B', text: 'Comunico o quanto antes, explico o cenário e proponho uma nova solução ou prazo.', weight: 100 },
+      { id: 'fc-15-c', label: 'C', text: 'Entrego uma versão incompleta dentro do prazo para não deixar de cumprir o combinado.', weight: 50 },
+      { id: 'fc-15-d', label: 'D', text: 'Priorizo outras demandas mais urgentes e aviso depois que o prazo passou.', weight: 25 },
     ]
   },
   {
     id: 16,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Compromisso',
+    prompt: 'Um colega depende de uma informação sua para concluir uma tarefa, mas você está com outras prioridades. Como você age?',
     options: [
-      { id: '16-A', label: 'A', text: 'Descontraído', trait: 'I' },
-      { id: '16-B', label: 'B', text: 'Resoluto', trait: 'D' },
-      { id: '16-C', label: 'C', text: 'Racional', trait: 'C' },
-      { id: '16-D', label: 'D', text: 'Confiável', trait: 'S' },
+      { id: 'fc-16-a', label: 'A', text: 'Deixo para responder quando terminar minhas próprias tarefas.', weight: 25 },
+      { id: 'fc-16-b', label: 'B', text: 'Avalio a urgência, retorno ao colega dentro de um prazo combinado e, se necessário, alinho prioridades com a liderança.', weight: 100 },
+      { id: 'fc-16-c', label: 'C', text: 'Respondo rapidamente, mesmo que a informação ainda não esteja correta ou completa.', weight: 50 },
+      { id: 'fc-16-d', label: 'D', text: 'Aviso que estou ocupado e deixo que o colega encontre outra forma de resolver.', weight: 25 },
     ]
   },
+  // 9. PRÁTICA PEDAGÓGICA
   {
     id: 17,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Prática Pedagógica',
+    prompt: 'Você domina uma atividade que um novo colega está tendo dificuldade para aprender. Como você tende a ajudá-lo?',
     options: [
-      { id: '17-A', label: 'A', text: 'Exato', trait: 'C' },
-      { id: '17-B', label: 'B', text: 'Impulsionador', trait: 'D' },
-      { id: '17-C', label: 'C', text: 'Relacional', trait: 'I' },
-      { id: '17-D', label: 'D', text: 'Ouvinte', trait: 'S' },
+      { id: 'fc-17-a', label: 'A', text: 'Explico rapidamente e deixo que ele pratique sozinho.', weight: 75 },
+      { id: 'fc-17-b', label: 'B', text: 'Faço a atividade por ele para garantir que seja entregue corretamente.', weight: 25 },
+      { id: 'fc-17-c', label: 'C', text: 'Faço a atividade junto com ele, explico o raciocínio, observo sua execução e dou feedback para que consiga repetir sozinho.', weight: 100 },
+      { id: 'fc-17-d', label: 'D', text: 'Indico materiais para estudo e espero que ele procure ajuda caso continue com dificuldade.', weight: 50 },
     ]
   },
   {
     id: 18,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
+    value: 'Prática Pedagógica',
+    prompt: 'Você percebe que um colega comete repetidamente o mesmo erro. Qual seria sua abordagem?',
     options: [
-      { id: '18-A', label: 'A', text: 'Prudente', trait: 'C' },
-      { id: '18-B', label: 'B', text: 'Criativo', trait: 'I' },
-      { id: '18-C', label: 'C', text: 'Empreendedor', trait: 'D' },
-      { id: '18-D', label: 'D', text: 'Pacifista', trait: 'S' },
+      { id: 'fc-18-a', label: 'A', text: 'Corrijo o erro sempre que ele acontecer para garantir a qualidade da entrega.', weight: 50 },
+      { id: 'fc-18-b', label: 'B', text: 'Converso com a pessoa, tento entender onde está a dificuldade e busco uma forma de ajudá-la a desenvolver autonomia.', weight: 100 },
+      { id: 'fc-18-c', label: 'C', text: 'Informo a liderança para que ela decida como conduzir a situação.', weight: 50 },
+      { id: 'fc-18-d', label: 'D', text: 'Evito interferir, pois cada pessoa deve aprender com os próprios erros.', weight: 25 },
     ]
   },
-  {
-    id: 19,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '19-A', label: 'A', text: 'Perceptivo', trait: 'C' },
-      { id: '19-B', label: 'B', text: 'Caloroso', trait: 'I' },
-      { id: '19-C', label: 'C', text: 'Equilibrado', trait: 'S' },
-      { id: '19-D', label: 'D', text: 'Proativo', trait: 'D' },
-    ]
-  },
-  {
-    id: 20,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '20-A', label: 'A', text: 'Destemido', trait: 'D' },
-      { id: '20-B', label: 'B', text: 'Extrovertido', trait: 'I' },
-      { id: '20-C', label: 'C', text: 'Gentil', trait: 'S' },
-      { id: '20-D', label: 'D', text: 'Técnico', trait: 'C' },
-    ]
-  },
-  {
-    id: 21,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '21-A', label: 'A', text: 'Harmônico', trait: 'S' },
-      { id: '21-B', label: 'B', text: 'Eficiente', trait: 'D' },
-      { id: '21-C', label: 'C', text: 'Factual', trait: 'C' },
-      { id: '21-D', label: 'D', text: 'Charmoso', trait: 'I' },
-    ]
-  },
-  {
-    id: 22,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '22-A', label: 'A', text: 'Seguro', trait: 'S' },
-      { id: '22-B', label: 'B', text: 'Vibrante', trait: 'I' },
-      { id: '22-C', label: 'C', text: 'Rápido', trait: 'D' },
-      { id: '22-D', label: 'D', text: 'Perspicaz', trait: 'C' },
-    ]
-  },
-  {
-    id: 23,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '23-A', label: 'A', text: 'Sereno', trait: 'S' },
-      { id: '23-B', label: 'B', text: 'Motivador', trait: 'I' },
-      { id: '23-C', label: 'C', text: 'Amigável', trait: 'S' },
-      { id: '23-D', label: 'D', text: 'Formal', trait: 'C' },
-    ]
-  },
-  {
-    id: 24,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '24-A', label: 'A', text: 'Coerente', trait: 'C' },
-      { id: '24-B', label: 'B', text: 'Espontâneo', trait: 'I' },
-      { id: '24-C', label: 'C', text: 'Ambicioso', trait: 'D' },
-      { id: '24-D', label: 'D', text: 'Compreensivo', trait: 'S' },
-    ]
-  },
-  {
-    id: 25,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '25-A', label: 'A', text: 'Observador', trait: 'C' },
-      { id: '25-B', label: 'B', text: 'Participativo', trait: 'I' },
-      { id: '25-C', label: 'C', text: 'Vigoroso', trait: 'D' },
-      { id: '25-D', label: 'D', text: 'Zeloso', trait: 'S' },
-    ]
-  },
-  {
-    id: 26,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '26-A', label: 'A', text: 'Vigilante', trait: 'C' },
-      { id: '26-B', label: 'B', text: 'Discreto', trait: 'S' },
-      { id: '26-C', label: 'C', text: 'Aglutinador', trait: 'I' },
-      { id: '26-D', label: 'D', text: 'Incisivo', trait: 'D' },
-    ]
-  },
-  {
-    id: 27,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '27-A', label: 'A', text: 'Sério', trait: 'C' },
-      { id: '27-B', label: 'B', text: 'Dedicado', trait: 'S' },
-      { id: '27-C', label: 'C', text: 'Focado', trait: 'D' },
-      { id: '27-D', label: 'D', text: 'Afável', trait: 'I' },
-    ]
-  },
-  {
-    id: 28,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '28-A', label: 'A', text: 'Analista', trait: 'C' },
-      { id: '28-B', label: 'B', text: 'Envolvente', trait: 'I' },
-      { id: '28-C', label: 'C', text: 'Autônomo', trait: 'D' },
-      { id: '28-D', label: 'D', text: 'Resiliente', trait: 'S' },
-    ]
-  },
-  {
-    id: 29,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '29-A', label: 'A', text: 'Minucioso', trait: 'C' },
-      { id: '29-B', label: 'B', text: 'Estacionário', trait: 'S' },
-      { id: '29-C', label: 'C', text: 'Direcionado', trait: 'D' },
-      { id: '29-D', label: 'D', text: 'Radiante', trait: 'I' },
-    ]
-  },
-  {
-    id: 30,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '30-A', label: 'A', text: 'Comunicador', trait: 'I' },
-      { id: '30-B', label: 'B', text: 'Cumpridor', trait: 'C' },
-      { id: '30-C', label: 'C', text: 'Estrategista', trait: 'D' },
-      { id: '30-D', label: 'D', text: 'Bondoso', trait: 'S' },
-    ]
-  },
-  {
-    id: 31,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '31-A', label: 'A', text: 'Prestativo', trait: 'S' },
-      { id: '31-B', label: 'B', text: 'Arrojado', trait: 'D' },
-      { id: '31-C', label: 'C', text: 'Brilhante', trait: 'I' },
-      { id: '31-D', label: 'D', text: 'Calculista', trait: 'C' },
-    ]
-  },
-  {
-    id: 32,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '32-A', label: 'A', text: 'Fundamentado', trait: 'C' },
-      { id: '32-B', label: 'B', text: 'Versátil', trait: 'I' },
-      { id: '32-C', label: 'C', text: 'Prático', trait: 'D' },
-      { id: '32-D', label: 'D', text: 'Acolhedor', trait: 'S' },
-    ]
-  },
-  {
-    id: 33,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '33-A', label: 'A', text: 'Líder', trait: 'D' },
-      { id: '33-B', label: 'B', text: 'Mediador', trait: 'S' },
-      { id: '33-C', label: 'C', text: 'Agradável', trait: 'I' },
-      { id: '33-D', label: 'D', text: 'Imparcial', trait: 'C' },
-    ]
-  },
-  {
-    id: 34,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '34-A', label: 'A', text: 'Perito', trait: 'C' },
-      { id: '34-B', label: 'B', text: 'Solidário', trait: 'S' },
-      { id: '34-C', label: 'C', text: 'Espirituoso', trait: 'I' },
-      { id: '34-D', label: 'D', text: 'Ativo', trait: 'D' },
-    ]
-  },
-  {
-    id: 35,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '35-A', label: 'A', text: 'Impetuoso', trait: 'D' },
-      { id: '35-B', label: 'B', text: 'Escrupuloso', trait: 'C' },
-      { id: '35-C', label: 'C', text: 'Deslumbrante', trait: 'I' },
-      { id: '35-D', label: 'D', text: 'Perseverante', trait: 'S' },
-    ]
-  },
-  {
-    id: 36,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '36-A', label: 'A', text: 'Compenetrado', trait: 'C' },
-      { id: '36-B', label: 'B', text: 'Afetuoso', trait: 'I' },
-      { id: '36-C', label: 'C', text: 'Fiel', trait: 'S' },
-      { id: '36-D', label: 'D', text: 'Sistemático', trait: 'C' },
-    ]
-  },
-  {
-    id: 37,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '37-A', label: 'A', text: 'Articulado', trait: 'I' },
-      { id: '37-B', label: 'B', text: 'Tolerante', trait: 'S' },
-      { id: '37-C', label: 'C', text: 'Resolvedor', trait: 'D' },
-      { id: '37-D', label: 'D', text: 'Pontual', trait: 'C' },
-    ]
-  },
-  {
-    id: 38,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '38-A', label: 'A', text: 'Cauteloso', trait: 'C' },
-      { id: '38-B', label: 'B', text: 'Amável', trait: 'S' },
-      { id: '38-C', label: 'C', text: 'Audaz', trait: 'D' },
-      { id: '38-D', label: 'D', text: 'Sociável', trait: 'I' },
-    ]
-  },
-  {
-    id: 39,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '39-A', label: 'A', text: 'Alegre', trait: 'I' },
-      { id: '39-B', label: 'B', text: 'Executor', trait: 'D' },
-      { id: '39-C', label: 'C', text: 'Estável', trait: 'S' },
-      { id: '39-D', label: 'D', text: 'Crítico', trait: 'C' },
-    ]
-  },
-  {
-    id: 40,
-    prompt: 'Qual palavra melhor te descreve?',
-    description: 'Selecione a opção que mais combina com você.',
-    options: [
-      { id: '40-A', label: 'A', text: 'Bondoso', trait: 'S' },
-      { id: '40-B', label: 'B', text: 'Organizado', trait: 'C' },
-      { id: '40-C', label: 'C', text: 'Vencedor', trait: 'D' },
-      { id: '40-D', label: 'D', text: 'Influente', trait: 'I' },
-    ]
-  }
-];
-
-export const FIT_CULTURAL_QUESTIONS: FitCulturalQuestion[] = [
-  {
-    id: 1,
-    prompt: 'Em um ambiente de trabalho, qual situação mais representa sua preferência?',
-    options: [
-      { id: 'fc-1-a', label: 'A', text: 'Ambiente dinâmico com autonomia para propor soluções inovadoras e assumir responsabilidades.', category: 'Autonomia', weight: 95 },
-      { id: 'fc-1-b', label: 'B', text: 'Ambiente altamente colaborativo onde todas as decisões são debatidas e validadas em conjunto.', category: 'Colaboração', weight: 90 },
-      { id: 'fc-1-c', label: 'C', text: 'Ambiente com processos consolidados, instruções claras e métricas bem definidas.', category: 'Qualidade', weight: 80 },
-      { id: 'fc-1-d', label: 'D', text: 'Ambiente flexível com foco total em atender as necessidades imediatas dos clientes.', category: 'Foco no Cliente', weight: 88 },
-    ]
-  },
-  {
-    id: 2,
-    prompt: 'Como você prefere receber orientação e feedbacks da sua liderança?',
-    options: [
-      { id: 'fc-2-a', label: 'A', text: 'Feedbacks frequentes, diretos e transparentes em reuniões periódicas 1:1.', category: 'Colaboração', weight: 95 },
-      { id: 'fc-2-b', label: 'B', text: 'Metas e objetivos claros no início, com liberdade para executar e check-in ao final.', category: 'Autonomia', weight: 90 },
-      { id: 'fc-2-c', label: 'C', text: 'Acompanhamento estruturado com relatórios de métricas e indicadores de desempenho.', category: 'Qualidade', weight: 85 },
-      { id: 'fc-2-d', label: 'D', text: 'Orientações práticas focadas no impacto direto que meu trabalho gera para o cliente.', category: 'Foco no Cliente', weight: 90 },
-    ]
-  },
-  {
-    id: 3,
-    prompt: 'Quando confrontado com uma meta desafiadora que parece difícil de atingir:',
-    options: [
-      { id: 'fc-3-a', label: 'A', text: 'Busco novas abordagens, testo hipóteses diferentes e aceito riscos calculados para inovar.', category: 'Inovação', weight: 95 },
-      { id: 'fc-3-b', label: 'B', text: 'Reúno a equipe para construir um plano conjunto dividindo forças e talentos complementares.', category: 'Colaboração', weight: 92 },
-      { id: 'fc-3-c', label: 'C', text: 'Reviso o planejamento detalhado, otimizo o tempo e elimino gargalos operacionais.', category: 'Qualidade', weight: 88 },
-      { id: 'fc-3-d', label: 'D', text: 'Foco nas ações que trazem retorno mais rápido para o usuário ou cliente final.', category: 'Foco no Cliente', weight: 85 },
-    ]
-  },
-  {
-    id: 4,
-    prompt: 'Qual aspecto da cultura de uma organização você considera mais essencial para seu engajamento?',
-    options: [
-      { id: 'fc-4-a', label: 'A', text: 'Segurança psicológica, respeito mútuo e um clima organizacional positivo e acolhedor.', category: 'Colaboração', weight: 92 },
-      { id: 'fc-4-b', label: 'B', text: 'Cultura de inovação contínua, aprendizado rápido com erros e incentivo a novas ideias.', category: 'Inovação', weight: 95 },
-      { id: 'fc-4-c', label: 'C', text: 'Transparência nas decisões estratégicas e clareza sobre o propósito e visão da empresa.', category: 'Autonomia', weight: 90 },
-      { id: 'fc-4-d', label: 'D', text: 'Excelência na qualidade das entregas e orgulho em pertencer a uma marca de referência.', category: 'Qualidade', weight: 88 },
-    ]
-  },
-  {
-    id: 5,
-    prompt: 'Ao identificar que um processo interno está burocrático e atrasando entregas:',
-    options: [
-      { id: 'fc-5-a', label: 'A', text: 'Proponho um modelo simplificado e piloto uma solução mais ágil com minha equipe.', category: 'Inovação', weight: 95 },
-      { id: 'fc-5-b', label: 'B', text: 'Converso com os responsáveis das outras áreas para entender o contexto e alinhar melhorias.', category: 'Colaboração', weight: 90 },
-      { id: 'fc-5-c', label: 'C', text: 'Mapeio o fluxo atual com dados e apresento um relatório formal de otimização à gerência.', category: 'Qualidade', weight: 85 },
-      { id: 'fc-5-d', label: 'D', text: 'Avalio se a burocracia está impactando a experiência do cliente para priorizar o ajuste.', category: 'Foco no Cliente', weight: 88 },
-    ]
-  },
-  {
-    id: 6,
-    prompt: 'Como você equilibra a agilidade na entrega com a excelência técnica?',
-    options: [
-      { id: 'fc-6-a', label: 'A', text: 'Entrego versões funcionais rapidamente, colho feedbacks e itero para aperfeiçoar.', category: 'Inovação', weight: 92 },
-      { id: 'fc-6-b', label: 'B', text: 'Priorizo padrões de qualidade sólidos desde o início para evitar retrabalho futuro.', category: 'Qualidade', weight: 88 },
-      { id: 'fc-6-c', label: 'C', text: 'Alinho as expectativas com os stakeholders para definir o nível de acabamento ideal.', category: 'Colaboração', weight: 90 },
-      { id: 'fc-6-d', label: 'D', text: 'Garanto que o valor prometido ao cliente seja mantido, mesmo em prazos enxutos.', category: 'Foco no Cliente', weight: 90 },
-    ]
-  },
-  {
-    id: 7,
-    prompt: 'Em um projeto multidisciplinar com profissionais de diferentes especialidades:',
-    options: [
-      { id: 'fc-7-a', label: 'A', text: 'Estimulo a integração e garanto que todos tenham espaço para contribuir com seus saberes.', category: 'Colaboração', weight: 94 },
-      { id: 'fc-7-b', label: 'B', text: 'Assumo a responsabilidade pela minha parte com excelência e autonomia.', category: 'Autonomia', weight: 88 },
-      { id: 'fc-7-c', label: 'C', text: 'Crio pontes entre visões diferentes para construir uma solução inovadora.', category: 'Inovação', weight: 92 },
-      { id: 'fc-7-d', label: 'D', text: 'Mantenho o alinhamento das entregas aos padrões de qualidade da organização.', category: 'Qualidade', weight: 86 },
-    ]
-  },
-  {
-    id: 8,
-    prompt: 'Qual postura melhor define sua visão sobre aprendizado e evolução na carreira?',
-    options: [
-      { id: 'fc-8-a', label: 'A', text: 'Curiosidade constante, busca autônoma por novos conhecimentos e tendências do mercado.', category: 'Inovação', weight: 96 },
-      { id: 'fc-8-b', label: 'B', text: 'Troca ativa com mentores, pares e participação em comunidades de prática.', category: 'Colaboração', weight: 90 },
-      { id: 'fc-8-c', label: 'C', text: 'Aprofundamento técnico rigoroso nas metodologias e ferramentas da minha área.', category: 'Qualidade', weight: 88 },
-      { id: 'fc-8-d', label: 'D', text: 'Capacitação voltada para resolver dores reais e gerar valor sustentável ao negócio.', category: 'Foco no Cliente', weight: 90 },
-    ]
-  }
 ];
 
 export const LOGIC_QUESTIONS: LogicQuestion[] = [
@@ -611,269 +379,3 @@ export const LOGIC_QUESTIONS: LogicQuestion[] = [
   }
 ];
 
-export const INITIAL_CANDIDATES: CandidateResult[] = [
-  {
-    id: 'cand-01',
-    fullName: 'Maria Silva',
-    email: 'maria.silva@email.com',
-    phone: '(11) 98765-4321',
-    jobPosition: 'Analista Comercial',
-    date: '28/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 2,
-    status: 'Concluído',
-    discScores: {
-      d: 86,
-      i: 68,
-      s: 38,
-      c: 44,
-      predominant: 'Dominância',
-      description: 'Perfil focado em resultados rápidos, liderança assertiva, tomada de decisão ágil e superação de metas comerciais ambiciosas.'
-    },
-    fitCulturalScore: 86,
-    logicScorePercent: 90,
-    logicScoreFraction: '9/10',
-    completedAt: '28/08/2026 10:45'
-  },
-  {
-    id: 'cand-02',
-    fullName: 'João Souza',
-    email: 'joao.souza@email.com',
-    phone: '(11) 97654-3210',
-    jobPosition: 'Assistente Administrativo',
-    date: '28/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 4,
-    status: 'Concluído',
-    discScores: {
-      d: 32,
-      i: 54,
-      s: 76,
-      c: 68,
-      predominant: 'Estabilidade',
-      description: 'Perfil paciente, colaborativo, com excelente constância nas rotinas administrativas, lealdade à equipe e foco em processos seguros.'
-    },
-    fitCulturalScore: 76,
-    logicScorePercent: 70,
-    logicScoreFraction: '7/10',
-    completedAt: '28/08/2026 09:20'
-  },
-  {
-    id: 'cand-03',
-    fullName: 'Carlos Lima',
-    email: 'carlos.lima@email.com',
-    phone: '(21) 99123-4567',
-    jobPosition: 'Analista de Marketing',
-    date: '28/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 6,
-    status: 'Concluído',
-    discScores: {
-      d: 45,
-      i: 60,
-      s: 55,
-      c: 82,
-      predominant: 'Conformidade',
-      description: 'Perfil analítico com forte rigor metodológico, atenção aos dados de campanhas, métricas de conversão e excelência na entrega técnica.'
-    },
-    fitCulturalScore: 82,
-    logicScorePercent: 80,
-    logicScoreFraction: '8/10',
-    completedAt: '28/08/2026 08:30'
-  },
-  {
-    id: 'cand-04',
-    fullName: 'Beatriz Martins',
-    email: 'beatriz.martins@email.com',
-    phone: '(31) 98877-6655',
-    jobPosition: 'Desenvolvedor',
-    date: '28/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 8,
-    status: 'Concluído',
-    discScores: {
-      d: 60,
-      i: 40,
-      s: 48,
-      c: 88,
-      predominant: 'Conformidade',
-      description: 'Forte raciocínio lógico-estruturado, precisão em arquitetura de software, padrão de código limpo e autonomia na resolução de problemas.'
-    },
-    fitCulturalScore: 92,
-    logicScorePercent: 100,
-    logicScoreFraction: '10/10',
-    completedAt: '28/08/2026 08:15'
-  },
-  {
-    id: 'cand-05',
-    fullName: 'Lucas Ferreira',
-    email: 'lucas.ferreira@email.com',
-    phone: '(19) 99345-6789',
-    jobPosition: 'Analista Comercial',
-    date: '27/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 26,
-    status: 'Concluído',
-    discScores: {
-      d: 70,
-      i: 85,
-      s: 42,
-      c: 35,
-      predominant: 'Influência',
-      description: 'Extremamente comunicativo, articulado, construtor de relacionamentos com clientes e com grande poder de persuasão e entusiasmo.'
-    },
-    fitCulturalScore: 88,
-    logicScorePercent: 80,
-    logicScoreFraction: '8/10',
-    completedAt: '27/08/2026 16:40'
-  },
-  {
-    id: 'cand-06',
-    fullName: 'Amanda Ribeiro',
-    email: 'amanda.ribeiro@email.com',
-    phone: '(41) 98456-7890',
-    jobPosition: 'Assistente Administrativo',
-    date: '27/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 30,
-    status: 'Concluído',
-    discScores: {
-      d: 30,
-      i: 48,
-      s: 82,
-      c: 74,
-      predominant: 'Estabilidade',
-      description: 'Organizada, paciente, excelente gestão de documentos e controle de fluxo com foco em harmonia e conformidade com as regras internas.'
-    },
-    fitCulturalScore: 84,
-    logicScorePercent: 70,
-    logicScoreFraction: '7/10',
-    completedAt: '27/08/2026 14:10'
-  },
-  {
-    id: 'cand-07',
-    fullName: 'Rafael Costa',
-    email: 'rafael.costa@email.com',
-    phone: '(51) 99234-5678',
-    jobPosition: 'Desenvolvedor',
-    date: '27/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 34,
-    status: 'Concluído',
-    discScores: {
-      d: 75,
-      i: 45,
-      s: 52,
-      c: 80,
-      predominant: 'Conformidade',
-      description: 'Perfil focado em performance, engenharia de sistemas robusta, investigação criteriosa de bugs e entregas de alto impacto técnico.'
-    },
-    fitCulturalScore: 80,
-    logicScorePercent: 90,
-    logicScoreFraction: '9/10',
-    completedAt: '27/08/2026 11:30'
-  },
-  {
-    id: 'cand-08',
-    fullName: 'Gabriela Santos',
-    email: 'gabriela.santos@email.com',
-    phone: '(71) 98123-9876',
-    jobPosition: 'Analista de Marketing',
-    date: '26/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 50,
-    status: 'Concluído',
-    discScores: {
-      d: 65,
-      i: 90,
-      s: 50,
-      c: 38,
-      predominant: 'Influência',
-      description: 'Alta criatividade, facilidade na produção de conteúdo multimídia, engajamento em redes sociais e trabalho integrado em equipe.'
-    },
-    fitCulturalScore: 90,
-    logicScorePercent: 80,
-    logicScoreFraction: '8/10',
-    completedAt: '26/08/2026 17:05'
-  },
-  {
-    id: 'cand-09',
-    fullName: 'Fernando Rocha',
-    email: 'fernando.rocha@email.com',
-    phone: '(61) 99876-5432',
-    jobPosition: 'Desenvolvedor',
-    date: '26/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 54,
-    status: 'Concluído',
-    discScores: {
-      d: 55,
-      i: 48,
-      s: 60,
-      c: 84,
-      predominant: 'Conformidade',
-      description: 'Metódico, calmo sob pressão, prioriza arquitetura limpa, testes unitários e documentação técnica impecável.'
-    },
-    fitCulturalScore: 85,
-    logicScorePercent: 90,
-    logicScoreFraction: '9/10',
-    completedAt: '26/08/2026 15:20'
-  },
-  {
-    id: 'cand-10',
-    fullName: 'Juliana Mendes',
-    email: 'juliana.mendes@email.com',
-    phone: '(81) 98765-1234',
-    jobPosition: 'Analista Comercial',
-    date: '25/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 75,
-    status: 'Concluído',
-    discScores: {
-      d: 80,
-      i: 82,
-      s: 40,
-      c: 45,
-      predominant: 'Influência',
-      description: 'Combinação de alta energia comercial (Dominância + Influência), proatividade em prospecção e excelente fechamento de negócios.'
-    },
-    fitCulturalScore: 82,
-    logicScorePercent: 80,
-    logicScoreFraction: '8/10',
-    completedAt: '25/08/2026 16:50'
-  },
-  {
-    id: 'cand-11',
-    fullName: 'Pedro Alves',
-    email: 'pedro.alves@email.com',
-    phone: '(85) 99123-8899',
-    jobPosition: 'Assistente Administrativo',
-    date: '25/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 78,
-    status: 'Concluído',
-    discScores: {
-      d: 35,
-      i: 50,
-      s: 70,
-      c: 65,
-      predominant: 'Estabilidade',
-      description: 'Responsável, colaborativo, com boa adaptabilidade a rotinas de faturamento e apoio administrativo a múltiplos departamentos.'
-    },
-    fitCulturalScore: 78,
-    logicScorePercent: 60,
-    logicScoreFraction: '6/10',
-    completedAt: '25/08/2026 14:15'
-  },
-  {
-    id: 'cand-12',
-    fullName: 'Camila Duarte',
-    email: 'camila.duarte@email.com',
-    phone: '(48) 98899-0011',
-    jobPosition: 'Analista de Marketing',
-    date: '24/08/2026',
-    timestamp: Date.now() - 1000 * 60 * 60 * 100,
-    status: 'Concluído',
-    discScores: {
-      d: 58,
-      i: 78,
-      s: 62,
-      c: 50,
-      predominant: 'Influência',
-      description: 'Foco em branding, experiência do cliente, empatia com o público-alvo e capacidade de mobilizar equipes em campanhas integradas.'
-    },
-    fitCulturalScore: 88,
-    logicScorePercent: 80,
-    logicScoreFraction: '8/10',
-    completedAt: '24/08/2026 11:10'
-  }
-];

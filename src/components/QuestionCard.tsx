@@ -46,6 +46,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         'B': 1, '2': 1,
         'C': 2, '3': 2,
         'D': 3, '4': 3,
+        'E': 4, '5': 4,
       };
 
       if (key in optionMap) {
@@ -119,7 +120,15 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
       {/* Keyboard hint */}
       <div className="mt-4 flex items-center justify-end text-[11px] text-slate-400">
-        <span className="hidden sm:inline">Dica: Você também pode usar as teclas <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-slate-700">A</kbd> <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-slate-700">B</kbd> <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-slate-700">C</kbd> <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-slate-700">D</kbd></span>
+        <span className="hidden sm:inline">
+          Dica: Você também pode usar as teclas{' '}
+          {options.map((opt, idx) => (
+            <React.Fragment key={opt.id}>
+              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded font-mono text-slate-700">{opt.label}</kbd>
+              {idx < options.length - 1 && ' '}
+            </React.Fragment>
+          ))}
+        </span>
       </div>
 
     </div>
